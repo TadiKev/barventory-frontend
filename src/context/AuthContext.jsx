@@ -1,15 +1,23 @@
 import { createContext, useState, useEffect } from 'react';
 import axios from 'axios';
+
+// Use VITE_API_URL in production; fallback to localhost:5000 for local dev
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [user, setUser] = useState(
+    JSON.parse(localStorage.getItem('user'))
+  );
+  const [token, setToken] = useState(
+    localStorage.getItem('token')
+  );
 
   useEffect(() => {
-    if (token) axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
   }, [token]);
 
   const login = async (username, password) => {
