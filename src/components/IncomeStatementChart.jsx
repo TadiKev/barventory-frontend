@@ -1,0 +1,56 @@
+// src/components/IncomeStatementChart.jsx
+import React from "react";
+import { Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  Tooltip,
+  Legend,
+} from "chart.js";
+
+ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
+
+export default function IncomeStatementChart({ data }) {
+  const chartData = {
+    labels: ["Revenue","COGS","Gross Profit","Expenses","Net Profit"],
+    datasets: [{
+      label: "Amount (USD)",
+      backgroundColor: ["#4CAF50","#F44336","#2196F3","#FF9800","#9C27B0"],
+      data: [
+        data.revenue,
+        data.cogs,
+        data.grossProfit,
+        data.expenses,
+        data.netProfit
+      ],
+    }],
+  };
+
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `$${ctx.raw.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: v => `$${v.toLocaleString('en-US')}`,
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="mx-auto" style={{ maxWidth: 600 }}>
+      <Bar data={chartData} options={options} />
+    </div>
+  );
+}
