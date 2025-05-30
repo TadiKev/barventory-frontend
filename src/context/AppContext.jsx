@@ -2,6 +2,12 @@
 import React, { createContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
+
+// In dev, use empty so Vite proxy handles it; in prod, use your Render URL
+axios.defaults.baseURL = import.meta.env.DEV
+  ? ''
+  : import.meta.env.VITE_API_URL;
+
 export const AppContext = createContext();
 
 export function AppContextProvider({ children }) {
