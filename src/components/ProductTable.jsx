@@ -31,22 +31,28 @@ export default function ProductTable() {
 
   // fetch with pagination
   const fetchProducts = async (page = 1, pageSize = 10) => {
-    try {
-      const res = await fetch(
-        `/api/products?page=${page}&pageSize=${pageSize}`
-      );
-      const data = await res.json();
-      setProducts(data.products);
-      setPagination({
-        page: data.page,
-        pageSize: data.pageSize,
-        total: data.total,
-        totalPages: data.totalPages,
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  try {
+    // base is '' in dev, or 'https://barventory-backend.onrender.com' in prod
+    const base = import.meta.env.VITE_API_URL || '';
+
+    const res = await fetch(
+      `${base}/api/products?page=${page}&pageSize=${pageSize}`
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+    const data = await res.json();
+    setProducts(data.products);
+    setPagination({
+      page: data.page,
+      pageSize: data.pageSize,
+      total: data.total,
+      totalPages: data.totalPages,
+    });
+  } catch (err) {
+    console.error('Failed to fetch products:', err);
+  }
+};
+
 
   // on mount and when pagination changes
   useEffect(() => {

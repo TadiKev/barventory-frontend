@@ -321,8 +321,3 @@ export default function InventoryTable({ date }) {
     </div>
   );
 }
-
-
-
-
-
