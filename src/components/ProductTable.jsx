@@ -30,18 +30,26 @@ export default function ProductTable() {
   });
 
   // fetch with pagination
- const fetchProducts = async (page = 1, pageSize = 10) => {
+ // src/components/ProductTable.jsx
+const fetchProducts = async (page = 1, pageSize = 10) => {
   try {
-    // In dev: import.meta.env.DEV is true → base = ''
-    // In prod: DEV is false → use your Render URL
-    const base = import.meta.env.DEV ? '' : import.meta.env.VITE_API_URL;
+    // If we're running in dev, Vite’s proxy handles "/api/…" → localhost:5000.
+    // Otherwise (in prod), use VITE_API_URL (guaranteed by Vercel’s env var).
+    const base =
+      import.meta.env.DEV || !import.meta.env.VITE_API_URL
+        ? ''                           // development or missing env var
+        : import.meta.env.VITE_API_URL; // production: "https://barventory-backend.onrender.com"
 
-    const res = await fetch(
-      `${base}/api/products?page=${page}&pageSize=${pageSize}`
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Always prepend a leading slash after the host in production:
+    const url = import.meta.env.DEV
+      ? `/api/products?page=${page}&pageSize=${pageSize}`
+      : `${base}/api/products?page=${page}&pageSize=${pageSize}`;
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
     const data = await res.json();
-
     setProducts(data.products);
     setPagination({
       page: data.page,
