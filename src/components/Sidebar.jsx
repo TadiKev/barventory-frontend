@@ -1,3 +1,4 @@
+// src/components/Sidebar.jsx
 import React, { useContext } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
@@ -6,24 +7,26 @@ import {
   BuildingLibraryIcon,
   CubeIcon,
   ClipboardDocumentListIcon,
-  CurrencyDollarIcon,
   BanknotesIcon,
   ChartBarIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline';
 
+// Define each link along with which roles may see it
 const links = [
-  { to: '/dashboard',             label: 'Home',             icon: HomeIcon },
-  { to: '/bars',                  label: 'Bars',             icon: BuildingLibraryIcon },
-  { to: '/products',              label: 'Products',         icon: CubeIcon },
-  { to: '/inventory',             label: 'Inventory',        icon: ClipboardDocumentListIcon },
-  // { to: '/transactions',        label: 'Transactions',     icon: CurrencyDollarIcon },
-  { to: '/expenses',              label: 'Expenses',         icon: BanknotesIcon },
-  { to: '/reports/income-statement', label: 'Income Statement', icon: ChartBarIcon },
+  { to: '/dashboard',          label: 'Home',             icon: HomeIcon, roles: ['admin','employee'] },
+  { to: '/bars',               label: 'Bars',             icon: BuildingLibraryIcon, roles: ['admin'] },
+  { to: '/products',           label: 'Products',         icon: CubeIcon, roles: ['admin'] },
+  { to: '/inventory',          label: 'Inventory',        icon: ClipboardDocumentListIcon, roles: ['admin','employee'] },
+  { to: '/expenses',           label: 'Expenses',         icon: BanknotesIcon, roles: ['admin','employee'] },
+  { to: '/reports/income-statement', label: 'Income Statement', icon: ChartBarIcon, roles: ['admin'] },
+  { to: '/transfers',          label: 'Transfers',        icon: ArrowsRightLeftIcon, roles: ['admin'] },
 ];
 
 export default function Sidebar() {
-  const { logout } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
+  const role = user?.role;
 
   const handleLogout = () => {
     logout();
@@ -31,42 +34,39 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-16 md:w-64 bg-[#fff0f3] text-pink-900 h-screen flex flex-col transition-all duration-300 shadow-xl">
-      {/* Brand / Logo */}
-      <div className="px-2 md:px-6 py-6 hidden md:block">
-        <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-pink-600">
-          BarOwner
-        </h1>
-        <p className="mt-1 text-xs md:text-sm text-pink-500">Admin Dashboard</p>
+    <aside className="w-16 md:w-64 bg-[#fff0f3] text-pink-900 h-screen flex flex-col shadow-xl">
+      {/* Brand */}
+      <div className="px-6 py-6 hidden md:block">
+        <h1 className="text-3xl font-extrabold text-pink-600">BarOwner</h1>
+        <p className="text-sm text-pink-500">Admin Dashboard</p>
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 px-1 md:px-2 mt-4">
-        {links.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end>
-            {({ isActive }) => (
-              <div className="border-b border-yellow-400/40 mb-2">
-                <div
-                  className={`flex items-center p-2 md:px-4 md:py-3 rounded-lg transition-colors
-                    ${isActive ? 'bg-pink-500 text-white' : 'text-pink-600 hover:bg-pink-100'}`}
-                >
-                  <Icon
-                    className={`h-5 w-5 md:h-6 md:w-6 mx-auto md:mr-3 md:ml-0 flex-shrink-0
-                      ${isActive ? 'text-white' : 'text-pink-600'}`}
-                  />
-                  <span className="hidden md:inline font-medium">{label}</span>
+      {/* Nav Links */}
+      <nav className="flex-1 px-2 mt-4">
+        {links
+          .filter(link => link.roles.includes(role))
+          .map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to} end>
+              {({ isActive }) => (
+                <div className="mb-2 border-b border-yellow-400/40">
+                  <div
+                    className={`flex items-center p-2 rounded-lg transition-colors
+                      ${isActive ? 'bg-pink-500 text-white' : 'text-pink-600 hover:bg-pink-100'}`}
+                  >
+                    <Icon className={`h-6 w-6 flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
+                    <span className="hidden md:inline ml-3 font-medium">{label}</span>
+                  </div>
                 </div>
-              </div>
-            )}
-          </NavLink>
-        ))}
+              )}
+            </NavLink>
+          ))}
       </nav>
 
-      {/* Logout Button */}
-      <div className="px-2 md:px-6 py-4">
+      {/* Logout */}
+      <div className="px-6 py-4">
         <button
           onClick={handleLogout}
-          className="w-full py-2 text-xs md:text-base bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition transform hover:scale-[1.02]"
+          className="w-full py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600"
         >
           Logout
         </button>

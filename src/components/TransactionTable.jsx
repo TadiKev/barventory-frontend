@@ -4,7 +4,7 @@ import { AppContext } from '../context/AppContext';
 
 export default function TransactionTable() {
   const {
-    transactions = [],      // default to empty array
+    transactions = [],      
     loading,
     error,
   } = useContext(AppContext);

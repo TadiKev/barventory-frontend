@@ -1,16 +1,11 @@
-// vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  build: {
-    // since vite.config.js lives at project root,
-    // this will emit to `<project-root>/build/`
-    outDir: 'build',
-  },
   server: {
     proxy: {
+      // any request to /api will be forwarded to your Express server on port 5000
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true,

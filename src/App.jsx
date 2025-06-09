@@ -1,27 +1,23 @@
-import React, { useContext } from 'react';
+// src/App.jsx
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-// Import both providers
-import { AuthProvider, AuthContext } from './context/AuthContext';
+import { AuthProvider }     from './context/AuthContext';
 import { AppContextProvider } from './context/AppContext';
 
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import AuthForm from './pages/AuthForm';
 
-import Dashboard from './pages/Dashboard';
-import Bars from './pages/Bars';
-import Products from './pages/Products';
-import Inventory from './pages/Inventory';
-import Transactions from './pages/Transactions';
-import Expenses from './pages/Expenses';
+import Dashboard       from './pages/Dashboard';
+import Bars            from './pages/Bars';
+import Products        from './pages/Products';
+import Inventory       from './pages/Inventory';
+import Expenses        from './pages/Expenses';
 import IncomeStatement from './pages/Reports/IncomeStatement';
+import Transfers       from './pages/Transfers';
 
-// A wrapper for protected routes
-function PrivateRoute({ children }) {
-  const { user } = useContext(AuthContext);
-  return user ? children : <Navigate to="/auth" replace />;
-}
+import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
   return (
@@ -40,65 +36,67 @@ export default function App() {
                   {/* Public auth page */}
                   <Route path="/auth" element={<AuthForm />} />
 
-                  {/* Protected routes */}
+                  {/* Shared pages (both admin & employee) */}
                   <Route
                     path="/dashboard"
                     element={
-                      <PrivateRoute>
+                      <ProtectedRoute>
                         <Dashboard />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/bars"
-                    element={
-                      <PrivateRoute>
-                        <Bars />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/products"
-                    element={
-                      <PrivateRoute>
-                        <Products />
-                      </PrivateRoute>
+                      </ProtectedRoute>
                     }
                   />
                   <Route
                     path="/inventory"
                     element={
-                      <PrivateRoute>
+                      <ProtectedRoute>
                         <Inventory />
-                      </PrivateRoute>
-                    }
-                  />
-                  <Route
-                    path="/transactions"
-                    element={
-                      <PrivateRoute>
-                        <Transactions />
-                      </PrivateRoute>
+                      </ProtectedRoute>
                     }
                   />
                   <Route
                     path="/expenses"
                     element={
-                      <PrivateRoute>
+                      <ProtectedRoute>
                         <Expenses />
-                      </PrivateRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  {/* Admin-only pages */}
+                  <Route
+                    path="/bars"
+                    element={
+                      <ProtectedRoute roles={['admin']}>
+                        <Bars />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/products"
+                    element={
+                      <ProtectedRoute roles={['admin']}>
+                        <Products />
+                      </ProtectedRoute>
                     }
                   />
                   <Route
                     path="/reports/income-statement"
                     element={
-                      <PrivateRoute>
+                      <ProtectedRoute roles={['admin']}>
                         <IncomeStatement />
-                      </PrivateRoute>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/transfers"
+                    element={
+                      <ProtectedRoute roles={['admin']}>
+                        <Transfers />
+                      </ProtectedRoute>
                     }
                   />
 
-                  {/* Fallback to home */}
+                  {/* Fallback */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>
