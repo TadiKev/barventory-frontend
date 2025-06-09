@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // any request to /api will be forwarded to your Express server on port 5000
+      // Dev: /api/* → your Express backend
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true,
@@ -14,7 +14,7 @@ export default defineConfig({
     },
   },
   build: {
-    // Change the default `dist` folder to `build`
+    // Prod: output into "build" instead of default "dist"
     outDir: 'build',
   },
 })
