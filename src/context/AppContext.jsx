@@ -277,6 +277,10 @@ export function AppContextProvider({ children }) {
     }
   };
 
+    // ─── INVENTORY CRUD ───
+
+  // ...
+
   const bulkUpsertInventory = async (barId, date, items) => {
     setLoading(l => ({ ...l, inventory: true }));
     try {
@@ -288,11 +292,17 @@ export function AppContextProvider({ children }) {
         payload,
         makeConfig()
       );
-      // Merge updated rows back into state
+      // Merge updated rows back into state, guarding against any null product objects
       setInventory(prev => {
         const byId = {};
-        prev.forEach(r => byId[r.product._id] = r);
-        data.updated.forEach(r => byId[r.product._id] = r);
+        prev.forEach(r => {
+          const pid = r.product?._id;
+          if (pid) byId[pid] = r;
+        });
+        data.updated.forEach(r => {
+          const pid = r.product?._id;
+          if (pid) byId[pid] = r;
+        });
         return Object.values(byId);
       });
       setError(e => ({ ...e, inventory: null }));
@@ -304,6 +314,7 @@ export function AppContextProvider({ children }) {
       setLoading(l => ({ ...l, inventory: false }));
     }
   };
+
 
   // ─── EXPENSES CRUD ───
 const fetchExpenses = useCallback(async (barId, from, to) => {

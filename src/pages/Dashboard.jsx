@@ -34,7 +34,7 @@ export default function Dashboard() {
     setWindow({ from, to });
     fetchTransactions(from, to);
     fetchInventory(currentBar, to);
-  }, [currentBar]);
+  }, [currentBar, fetchTransactions, fetchInventory]);
 
   // 1) Total SKUs
   const totalSKUs = inventory.length;
@@ -79,7 +79,8 @@ export default function Dashboard() {
 
   // 5) Bar performance comparison
   const barComparison = bars.map(bar => {
-    const barTx = transactions.filter(tx => tx.bar?._id === bar._id);
+    // guard tx.bar for null
+    const barTx = transactions.filter(tx => tx.bar && tx.bar._id === bar._id);
     const revenue = barTx.reduce((sum, tx) => sum + (tx.revenue || 0), 0);
     const cogs = barTx.reduce(
       (sum, tx) => sum + ((tx.quantity || 0) * (tx.product?.costPrice || 0)),
@@ -127,7 +128,7 @@ export default function Dashboard() {
         <Kpi title="Total SKUs" value={totalSKUs} />
         <Kpi title="Low Stock Alerts" value={lowStockItems.length} />
         <Kpi title="Avg Daily Sales/Item" value={salesVelocity[0]?.velocity?.toFixed(1) || 0} suffix=" units/day" />
-        <Kpi title="Avg Inv. Value" value={ (valueTrend.reduce((s,d)=>s+d.value,0)/7).toFixed(2) } prefix="$" />
+        <Kpi title="Avg Inv. Value" value={(valueTrend.reduce((s,d)=>s+d.value,0)/7).toFixed(2)} prefix="$" />
       </div>
 
       {/* Charts */}
@@ -176,30 +177,6 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </Card>
       )}
-
-      <Card title="Low Stock Items">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left">
-            <thead className="bg-gray-100">
-              <tr>
-                {['Product', 'On Hand', 'Threshold', 'Days Left'].map(h => (
-                  <th key={h} className="px-3 py-2">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {lowStockItems.map((it, idx) => (
-                <tr key={idx} className={it.onHand <= it.threshold ? 'bg-red-50' : ''}>
-                  <td className="px-3 py-2">{it.name}</td>
-                  <td className="px-3 py-2">{it.onHand}</td>
-                  <td className="px-3 py-2">{it.threshold}</td>
-                  <td className="px-3 py-2">{it.daysLeft}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
 
       <LowStockAlert lowStockCount={lowStockItems.length} />
     </div>
