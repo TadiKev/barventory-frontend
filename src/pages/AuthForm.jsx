@@ -1,3 +1,5 @@
+// src/pages/AuthForm.jsx
+
 import { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +9,7 @@ export default function AuthForm() {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');  // ← new state
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
   const navigate = useNavigate();
 
@@ -24,10 +26,11 @@ export default function AuthForm() {
       if (mode === 'login') {
         await login(username, password);
       } else {
-        // now passing three args: username, password, confirmPassword
         await register(username, password, confirmPassword);
       }
-      navigate('/dashboard');
+
+      // Redirect to “/” so HomeRedirect logic sends to inventory or dashboard
+      navigate('/', { replace: true });
     } catch (err) {
       setErrorMsg(err.response?.data?.message || `${mode} failed`);
     }

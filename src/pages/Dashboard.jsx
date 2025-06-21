@@ -23,73 +23,97 @@ export default function Dashboard() {
 
   const [window, setWindow] = useState({ from: '', to: '' });
 
-  useEffect(() => {
-    if (!currentBar) return;
-    const today = new Date();
-    const to = today.toISOString().slice(0,10);
-    const fromDate = new Date(today);
-    fromDate.setDate(today.getDate() - 6);
-    const from = fromDate.toISOString().slice(0,10);
+  // src/components/Dashboard.jsx
+useEffect(() => {
+  if (!currentBar) return;
 
-    setWindow({ from, to });
-    fetchReport(from, to);
-    fetchTransactions(currentBar, from, to);
-    fetchInventory(currentBar, to);
-  }, [currentBar]);
+  const today = new Date();
+  const to = today.toISOString().slice(0, 10);
+  const fromD = new Date(today);
+  fromD.setDate(fromD.getDate() - 6);
+  const from = fromD.toISOString().slice(0, 10);
+
+  setWindow({ from, to });
+
+  fetchReport(from, to);
+  fetchTransactions(from, to);
+  fetchInventory(currentBar, to);
+}, [currentBar]);
+
 
   const {
-    openingStock=0, purchases=0, closingStock=0,
-    revenue=0, cogs=0, grossProfit=0,
-    expenses=0, netProfit=0, byProduct=[]
+    openingStock = 0,
+    purchases = 0,
+    closingStock = 0,
+    revenue = 0,
+    cogs = 0,
+    grossProfit = 0,
+    expenses = 0,
+    netProfit = 0,
+    byProduct = [],
+    dailyTrend = []
   } = report || {};
 
-  let trendData = Array.isArray(report?.dailyTrend) ? report.dailyTrend : [];
+  let trendData = Array.isArray(dailyTrend) ? [...dailyTrend] : [];
   if (!trendData.length && window.from && window.to && transactions.length) {
-    const { from, to } = window;
-    const start = new Date(from), end = new Date(to);
-    end.setHours(23,59,59,999);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
-      const dateKey = d.toISOString().slice(0,10);
+    const start = new Date(window.from);
+    const end = new Date(window.to);
+    end.setHours(23, 59, 59, 999);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateKey = d.toISOString().slice(0, 10);
       const dayTxns = transactions.filter(tx => {
         const t = new Date(tx.date);
-        return t >= new Date(dateKey) && t <= new Date(dateKey+'T23:59:59.999Z');
+        return t >= new Date(dateKey) && t <= new Date(`${dateKey}T23:59:59.999Z`);
       });
-      const dayRevenue = dayTxns.reduce((s,tx) => s + tx.revenue, 0);
-      const dayCogs    = dayTxns.reduce((s,tx) => s + (tx.quantity * (tx.product.costPrice||0)), 0);
+      const dayRevenue = dayTxns.reduce((s, tx) => s + (tx.revenue || 0), 0);
+      const dayCogs = dayTxns.reduce((s, tx) => s + ((tx.quantity || 0) * (tx.product.costPrice || 0)), 0);
       trendData.push({ date: dateKey, revenue: dayRevenue, cogs: dayCogs });
     }
   }
 
   const topSelling = byProduct
-    .sort((a,b) => b.salesQty - a.salesQty)
-    .slice(0,5)
+    .sort((a, b) => b.salesQty - a.salesQty)
+    .slice(0, 5)
     .map(p => ({ name: p.productName, salesQty: p.salesQty }));
 
   const lowStockItems = inventory
-    .filter(r => r.closing <= (r.product.lowStockThreshold||0))
+    .filter(r => r.closing <= (r.product.lowStockThreshold || 0))
     .map(r => ({
-      name:      r.product.name,
-      onHand:    r.closing,
+      name: r.product.name,
+      onHand: r.closing,
       threshold: r.product.lowStockThreshold,
-      daysLeft:  '—'
+      daysLeft: '—'
     }));
 
-  const COLORS = ['#4ade80','#facc15','#f87171','#60a5fa','#a78bfa'];
+  const COLORS = ['#4ade80', '#facc15', '#f87171', '#60a5fa', '#a78bfa'];
 
-  if (loading.report || loading.transactions) return <div className="p-4 text-center">Loading dashboard&hellip;</div>;
-  if (error.report || error.transactions) return <div className="p-4 text-red-600 text-center">{error.report || error.transactions}</div>;
+  if (loading.report || loading.transactions || loading.inventory) {
+    return <div className="p-4 text-center">Loading dashboard&hellip;</div>;
+  }
+  if (error.report || error.transactions || error.inventory) {
+    return (
+      <div className="p-4 text-red-600 text-center">
+        {error.report || error.transactions || error.inventory}
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-0">Inventory Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-0">
+          Inventory Dashboard
+        </h1>
         <select
           value={currentBar}
           onChange={e => setCurrentBar(e.target.value)}
           className="border rounded p-2 w-full sm:w-auto"
         >
           <option value="all">All Bars</option>
-          {bars.map(b => <option key={b._id} value={b._id}>{b.name}</option>)}
+          {bars.map(b => (
+            <option key={b._id} value={b._id}>{b.name}</option>
+          ))}
         </select>
       </div>
 
@@ -99,11 +123,11 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Kpi title="Opening Stock" value={openingStock} prefix="$" />
-        <Kpi title="Purchases"      value={purchases}     prefix="$" />
-        <Kpi title="Closing Stock"  value={closingStock}   prefix="$" />
-        <Kpi title="Revenue"        value={revenue}       prefix="$" />
-        <Kpi title="COGS"           value={cogs}          prefix="$" />
-        <Kpi title="Net Profit"     value={netProfit}      prefix="$" />
+        <Kpi title="Purchases" value={purchases} prefix="$" />
+        <Kpi title="Closing Stock" value={closingStock} prefix="$" />
+        <Kpi title="Revenue" value={revenue} prefix="$" />
+        <Kpi title="COGS" value={cogs} prefix="$" />
+        <Kpi title="Net Profit" value={netProfit} prefix="$" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -115,7 +139,7 @@ export default function Dashboard() {
               <Tooltip />
               <Legend />
               <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#4ade80" />
-              <Line type="monotone" dataKey="cogs"    name="COGS"    stroke="#f87171" />
+              <Line type="monotone" dataKey="cogs" name="COGS" stroke="#f87171" />
             </LineChart>
           </ResponsiveContainer>
         </Card>
@@ -146,13 +170,13 @@ export default function Dashboard() {
           <table className="min-w-full text-left">
             <thead className="bg-gray-100">
               <tr>
-                {['Product','On Hand','Threshold','Days Left'].map(h => (
+                {['Product', 'On Hand', 'Threshold', 'Days Left'].map(h => (
                   <th key={h} className="px-3 py-2 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {lowStockItems.map((it,idx) => (
+              {lowStockItems.map((it, idx) => (
                 <tr key={idx} className={it.onHand <= it.threshold ? 'bg-red-50' : ''}>
                   <td className="px-3 py-2 whitespace-nowrap">{it.name}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{it.onHand}</td>
@@ -170,11 +194,13 @@ export default function Dashboard() {
   );
 }
 
-function Kpi({ title, value, prefix='' }) {
+function Kpi({ title, value, prefix = '' }) {
   return (
     <div className="bg-white shadow rounded-lg p-4 flex flex-col">
       <span className="text-sm text-gray-600">{title}</span>
-      <span className="text-2xl font-semibold mt-1">{prefix}{value?.toLocaleString()}</span>
+      <span className="text-2xl font-semibold mt-1">
+        {prefix}{value?.toLocaleString()}
+      </span>
     </div>
   );
 }
@@ -186,8 +212,4 @@ function Card({ title, children }) {
       {children}
     </div>
   );
-}
-
-function LowStockTable({ items }) {
-  return null; // moved inline into Card above for consistency
 }

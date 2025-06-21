@@ -10,18 +10,18 @@ export default function TransfersPage() {
     fetchTransfers,
     approveTransfer,
     rejectTransfer,
+    deleteTransfer,
     loading,
     error
   } = useContext(AppContext);
 
   const [statusFilter, setStatusFilter] = useState('pending');
 
-  // whenever filter changes, re-fetch
+  // Fetch whenever the filter changes
   useEffect(() => {
     fetchTransfers(statusFilter).catch(console.error);
   }, [statusFilter, fetchTransfers]);
 
-  // loading state for transfers
   if (loading.transfers) {
     return (
       <div className="p-4 flex justify-center">
@@ -30,7 +30,6 @@ export default function TransfersPage() {
     );
   }
 
-  // error state for transfers
   if (error.transfers) {
     return (
       <div className="p-4 text-red-600">
@@ -39,8 +38,8 @@ export default function TransfersPage() {
     );
   }
 
-  // ensure we have an array
   const safeTransfers = Array.isArray(transfers) ? transfers : [];
+  const todayISO = () => new Date().toISOString().slice(0, 10);
 
   return (
     <div className="p-6">
@@ -100,7 +99,7 @@ export default function TransfersPage() {
                     {t.status === 'pending' ? (
                       <>
                         <button
-                          onClick={() => approveTransfer(t._id)}
+                          onClick={() => approveTransfer(t._id, todayISO())}
                           className="text-green-600 hover:underline"
                         >
                           Approve
@@ -113,7 +112,16 @@ export default function TransfersPage() {
                         </button>
                       </>
                     ) : (
-                      <span className="text-gray-500 italic">—</span>
+                      <button
+                        onClick={async () => {
+                          await deleteTransfer(t._id);
+                          // Re-fetch the same status tab after deletion
+                          fetchTransfers(statusFilter).catch(console.error);
+                        }}
+                        className="text-gray-600 hover:underline"
+                      >
+                        Delete
+                      </button>
                     )}
                   </td>
                 </tr>

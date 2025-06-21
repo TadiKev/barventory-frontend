@@ -5,12 +5,17 @@ import { AppContext }  from '../context/AppContext';
 import { AuthContext } from '../context/AuthContext';
 import { Spinner }     from './Spinner';
 
-export default function InventoryTable({ date }) {
+export default function InventoryTable({ date: propDate }) {
   const { user } = useContext(AuthContext);
-
-  const roleLower = user?.role?.toLowerCase();
+  const roleLower  = user?.role?.toLowerCase();
   const isEmployee = roleLower === 'employee';
   const isAdmin    = roleLower === 'admin';
+
+  // get YYYY-MM-DD for today
+  const todayStr = new Date().toISOString().slice(0, 10);
+  // default to today if no propDate
+  const date     = propDate || todayStr;
+  const isToday  = date === todayStr;
 
   const {
     currentBar,
@@ -21,9 +26,11 @@ export default function InventoryTable({ date }) {
     requestTransfer,
     loading,
     error,
+    cashCount,
+    setCashCount,
+    saveCashCount
   } = useContext(AppContext);
 
-  // local state for in-UI edits
   const [editedRecords, setEditedRecords] = useState({});
   const [searchTerm, setSearchTerm]       = useState('');
   const [transferModal, setTransferModal] = useState({
@@ -33,7 +40,7 @@ export default function InventoryTable({ date }) {
     toBar: '',
   });
 
-  // load any saved edits from localStorage
+  // Persist unsaved edits
   useEffect(() => {
     const saved = localStorage.getItem('editedRecords');
     if (saved) setEditedRecords(JSON.parse(saved));
@@ -42,60 +49,56 @@ export default function InventoryTable({ date }) {
     localStorage.setItem('editedRecords', JSON.stringify(editedRecords));
   }, [editedRecords]);
 
-  // re-fetch inventory when bar or date changes
+  // Fetch inventory on bar/date change
   useEffect(() => {
     if (currentBar && date) {
       fetchInventory(currentBar, date).catch(console.error);
     }
   }, [currentBar, date]);
 
-  // start editing a row
+  // Row editing
   const startEdit = rec => {
+    if (isEmployee && !isToday) return;
     setEditedRecords(prev => ({
       ...prev,
       [rec.product._id]: {
         opening:       rec.opening       ?? 0,
         receivedQty:   rec.receivedQty   ?? 0,
-        salesQty:      rec.salesQty      ?? 0,
         manualClosing: rec.manualClosing ?? 0,
       }
     }));
   };
-
-  // update a single field in the edit
+  const cancelEdit = id => {
+    setEditedRecords(prev => {
+      const nxt = { ...prev };
+      delete nxt[id];
+      return nxt;
+    });
+  };
   const updateField = (id, field, val) => {
+    if (isEmployee && !isToday) return;
     const num = Number(val) || 0;
     setEditedRecords(prev => ({
       ...prev,
-      [id]: {
-        ...prev[id],
-        [field]: num
-      }
+      [id]: { ...prev[id], [field]: num }
     }));
   };
-
-  // send all pending edits in one bulk-upsert call
   const saveAll = async () => {
-    if (!currentBar) return;
+    if (!currentBar || (isEmployee && !isToday)) return;
     const items = Object.entries(editedRecords).map(([productId, f]) => ({
       productId,
       opening:       f.opening,
       receivedQty:   f.receivedQty,
-      transferInQty: 0,
-      transferOutQty:0,
-      salesQty:      f.salesQty,
       manualClosing: f.manualClosing,
     }));
     await bulkUpsertInventory(currentBar, date, items);
     setEditedRecords({});
   };
 
-  // transfer modal handlers
-  const openTransferModal = productId =>
-    setTransferModal({ open: true, productId, qty: 1, toBar: '' });
-  const closeTransferModal = () =>
-    setTransferModal({ open: false, productId: null, qty: 1, toBar: '' });
-  const submitTransfer = async () => {
+  // Transfer modal
+  const openTransferModal  = productId => setTransferModal({ open: true, productId, qty: 1, toBar: '' });
+  const closeTransferModal = ()          => setTransferModal({ open: false, productId: null, qty: 1, toBar: '' });
+  const submitTransfer     = async ()    => {
     const { productId, qty, toBar } = transferModal;
     if (!productId || !toBar || qty < 1) return;
     await requestTransfer({ productId, qty, fromBar: currentBar, toBar });
@@ -103,36 +106,53 @@ export default function InventoryTable({ date }) {
     closeTransferModal();
   };
 
-  // filtered + sorted list
+  // Filter + sort
   const displayed = inventory
     .filter(r => r.product.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    .sort((a, b) => a.product.name.localeCompare(b.product.name));
 
-  if (loading.inventory) {
-    return <div className="p-4 flex justify-center"><Spinner/></div>;
-  }
-  if (error.inventory) {
-    return (
-      <div className="p-4 text-red-600">
-        {error.inventory.includes('Network Error')
-          ? 'Cannot reach server—check your API base URL or proxy.'
-          : error.inventory}
-      </div>
-    );
-  }
+  // ENRICH with guaranteed salesQty & salesAmt
+  const enriched = displayed.map(r => {
+    const o     = r.opening       || 0;
+    const re    = r.receivedQty   || 0;
+    const ti    = r.transferInQty  || 0;
+    const to    = r.transferOutQty || 0;
+    const m     = r.manualClosing != null ? r.manualClosing : 0;
+    const price = r.sellingPrice ?? r.product.sellingPrice ?? 0;
+
+    const salesQty = o + re + ti - to - m;
+    const salesAmt = salesQty * price;
+
+    return { ...r, salesQty, salesAmt };
+  });
+
+  // Day‑End totals
+  const totalExpectedCash = enriched.reduce((sum, r) => sum + r.salesAmt, 0);
+  const cashVariance      = cashCount - totalExpectedCash;
+
+  if (loading.inventory) return (
+    <div className="p-4 flex justify-center">
+      <Spinner />
+    </div>
+  );
+  if (error.inventory) return (
+    <div className="p-4 text-red-600">
+      {error.inventory.includes('Network Error')
+        ? 'Cannot reach server—check your API base URL or proxy.'
+        : error.inventory}
+    </div>
+  );
 
   return (
-    <div className="bg-white shadow-md rounded-lg overflow-hidden">
+    <>
       {/* Unsaved banner */}
-      {(isEmployee || isAdmin) && Object.keys(editedRecords).length > 0 && (
+      {(isAdmin || (isEmployee && isToday)) && Object.keys(editedRecords).length > 0 && (
         <div className="bg-yellow-100 text-yellow-800 p-2 mb-2 rounded flex justify-between">
           <span>
-            {Object.keys(editedRecords).length} row
-            {Object.keys(editedRecords).length > 1 && 's'} unsaved.
+            {Object.keys(editedRecords).length} unsaved row
+            {Object.keys(editedRecords).length > 1 && 's'}.
           </span>
-          <button onClick={saveAll} className="underline font-medium">
-            Save All
-          </button>
+          <button onClick={saveAll} className="underline font-medium">Save All</button>
         </div>
       )}
 
@@ -157,110 +177,87 @@ export default function InventoryTable({ date }) {
                 'Sales','Transfer Out','Expected',
                 'Manual Closing','Variance','Actions'
               ].map(col => (
-                <th key={col}
-                  className="px-4 py-2 text-left text-sm font-medium text-gray-600">
+                <th key={col} className="px-4 py-2 text-left text-sm font-medium text-gray-600">
                   {col}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {displayed.map(rec => {
-              const id = rec.product._id;
-              const ed = editedRecords[id] || {};
-
-              const opening  = ed.opening       ?? rec.opening       ?? 0;
-              const received = ed.receivedQty   ?? rec.receivedQty   ?? 0;
-              const inT      = rec.transferInQty  ?? 0;
-              const sales    = ed.salesQty      ?? rec.salesQty      ?? 0;
-              const outT     = rec.transferOutQty ?? 0;
-              const manual   = ed.manualClosing !== undefined
+            {enriched.map(r => {
+              const id    = r.product._id;
+              const ed    = editedRecords[id];
+              const isEd  = Boolean(ed);
+              const opening = ed?.opening     ?? r.opening      ?? 0;
+              const received= ed?.receivedQty ?? r.receivedQty  ?? 0;
+              const inT     = r.transferInQty  ?? 0;
+              const outT    = r.transferOutQty ?? 0;
+              const manual  = isEd
                 ? ed.manualClosing
-                : (rec.manualClosing ?? null);
+                : (r.manualClosing ?? null);
 
-              // expected = opening + received + inT − (sales + outT)
+              // recalc in‑row values
+              const sales    = opening + received + inT - outT - (manual ?? 0);
               const expected = opening + received + inT - (sales + outT);
-              const variance = manual !== null ? manual - expected : null;
-              const isEd = id in editedRecords;
+              const variance = manual != null
+                ? manual - expected
+                : r.variance;
+
+              const canEdit = isAdmin || (isEmployee && isToday);
 
               return (
-                <tr key={id}
-                  className={`hover:bg-gray-50 ${variance !== null && variance < 0 ? 'bg-red-50' : ''}`}>
-                  <td className="px-4 py-2">{rec.product.name}</td>
+                <tr key={id} className={`hover:bg-gray-50 ${variance < 0 ? 'bg-red-50' : ''}`}>
+                  <td className="px-4 py-2">{r.product.name}</td>
                   <td className="px-4 py-2">{opening}</td>
                   <td className="px-4 py-2">
-                    {(isEmployee || isAdmin) && isEd ? (
-                      <input
-                        type="number"
-                        className="w-20 border rounded px-2 py-1"
-                        value={received}
-                        onChange={e => updateField(id, 'receivedQty', e.target.value)}
-                      />
-                    ) : received}
+                    {canEdit && isEd
+                      ? <input
+                          type="number"
+                          className="w-20 border rounded px-2 py-1"
+                          value={received}
+                          onChange={e => updateField(id, 'receivedQty', e.target.value)}
+                        />
+                      : received
+                    }
                   </td>
                   <td className="px-4 py-2">{inT}</td>
-                  <td className="px-4 py-2">
-                    {(isEmployee || isAdmin) && isEd ? (
-                      <input
-                        type="number"
-                        className="w-20 border rounded px-2 py-1"
-                        value={sales}
-                        onChange={e => updateField(id, 'salesQty', e.target.value)}
-                      />
-                    ) : sales}
-                  </td>
+                  <td className="px-4 py-2 font-semibold">{sales}</td>
                   <td className="px-4 py-2">{outT}</td>
                   <td className="px-4 py-2">{expected}</td>
                   <td className="px-4 py-2">
-                    {(isEmployee || isAdmin) && isEd ? (
-                      <input
-                        type="number"
-                        className="w-20 border rounded px-2 py-1"
-                        value={manual ?? ''}
-                        onChange={e => updateField(id, 'manualClosing', e.target.value)}
-                      />
-                    ) : manual !== null ? manual : '-'}
+                    {canEdit && isEd
+                      ? <input
+                          type="number"
+                          className="w-20 border rounded px-2 py-1"
+                          value={manual ?? ''}
+                          onChange={e => updateField(id, 'manualClosing', e.target.value)}
+                        />
+                      : (manual != null ? manual : '-')
+                    }
                   </td>
-                  <td className={`px-4 py-2 ${
-                      variance !== null
-                        ? variance < 0
-                          ? 'text-red-600 font-semibold'
-                          : 'text-green-600'
-                        : ''
-                    }`}>
-                    {variance !== null ? variance : '-'}
+                  <td className={`px-4 py-2 ${variance < 0 ? 'text-red-600 font-semibold' : 'text-green-600'}`}>
+                    {variance != null ? variance : '-'}
                   </td>
                   <td className="px-4 py-2 space-x-2">
-                    {(isEmployee || isAdmin) && (isEd
-                      ? <button
-                          onClick={() => {
-                            const nxt = { ...editedRecords };
-                            delete nxt[id];
-                            setEditedRecords(nxt);
-                          }}
-                          className="text-sm text-gray-600">
-                          Cancel
-                        </button>
-                      : <button
-                          onClick={() => startEdit(rec)}
-                          className="text-sm text-blue-600">
-                          Edit
-                        </button>
+                    {canEdit && (
+                      isEd
+                        ? <button onClick={() => cancelEdit(id)} className="text-sm text-gray-600">
+                            Cancel
+                          </button>
+                        : <button onClick={() => startEdit(r)} className="text-sm text-blue-600">
+                            Edit
+                          </button>
                     )}
-                    <button
-                      onClick={() => openTransferModal(id)}
-                      className="text-sm text-indigo-600 hover:underline">
+                    <button onClick={() => openTransferModal(id)} className="text-sm text-indigo-600 hover:underline">
                       Transfer
                     </button>
                   </td>
                 </tr>
               );
             })}
-
-            {displayed.length === 0 && (
+            {enriched.length === 0 && (
               <tr>
-                <td colSpan={10}
-                  className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={10} className="px-4 py-6 text-center text-gray-500">
                   No products match “{searchTerm}”
                 </td>
               </tr>
@@ -278,9 +275,7 @@ export default function InventoryTable({ date }) {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Destination Bar
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Destination Bar</label>
                 <select
                   className="mt-1 block w-full border rounded px-3 py-2"
                   value={transferModal.toBar}
@@ -293,18 +288,13 @@ export default function InventoryTable({ date }) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Quantity
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Quantity</label>
                 <input
                   type="number"
                   min="1"
                   className="mt-1 block w-full border rounded px-3 py-2"
                   value={transferModal.qty}
-                  onChange={e => setTransferModal(tm => ({
-                    ...tm,
-                    qty: Number(e.target.value) || 1
-                  }))}
+                  onChange={e => setTransferModal(tm => ({ ...tm, qty: Number(e.target.value) || 1 }))}
                 />
               </div>
             </div>
@@ -325,6 +315,37 @@ export default function InventoryTable({ date }) {
           </div>
         </div>
       )}
-    </div>
+
+      {/* Day‑End Summary: admin only */}
+      {isAdmin && (
+        <div className="p-4 border-t mt-4">
+          <h3 className="text-lg font-semibold mb-2">Day‑End Summary</h3>
+          <div className="grid grid-cols-2 gap-4 max-w-sm">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Expected Cash</label>
+              <div className="mt-1 text-xl font-bold">${totalExpectedCash.toFixed(2)}</div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Actual Cash Collected</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={cashCount}
+                onChange={e => setCashCount(Number(e.target.value))}
+                onBlur={() => saveCashCount(cashCount)}
+                className="mt-1 block w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Variance</label>
+              <div className={`mt-1 text-xl font-bold ${cashVariance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                ${cashVariance.toFixed(2)}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
