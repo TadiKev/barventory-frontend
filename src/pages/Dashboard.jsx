@@ -1,7 +1,8 @@
+// src/pages/Dashboard.jsx
 import React, { useContext, useEffect, useState } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
 import { AppContext } from '../context/AppContext';
 import LowStockAlert from '../components/LowStockAlert';
@@ -11,8 +12,6 @@ export default function Dashboard() {
     bars = [],
     currentBar,
     setCurrentBar,
-    report,
-    fetchReport,
     transactions = [],
     fetchTransactions,
     inventory = [],
@@ -23,88 +22,89 @@ export default function Dashboard() {
 
   const [window, setWindow] = useState({ from: '', to: '' });
 
-  // src/components/Dashboard.jsx
-useEffect(() => {
-  if (!currentBar) return;
+  // on bar change, load last 7 days
+  useEffect(() => {
+    if (!currentBar) return;
+    const today = new Date();
+    const to = today.toISOString().slice(0, 10);
+    const fromD = new Date(today);
+    fromD.setDate(fromD.getDate() - 6);
+    const from = fromD.toISOString().slice(0, 10);
 
-  const today = new Date();
-  const to = today.toISOString().slice(0, 10);
-  const fromD = new Date(today);
-  fromD.setDate(fromD.getDate() - 6);
-  const from = fromD.toISOString().slice(0, 10);
+    setWindow({ from, to });
+    fetchTransactions(from, to);
+    fetchInventory(currentBar, to);
+  }, [currentBar]);
 
-  setWindow({ from, to });
+  // 1) Total SKUs
+  const totalSKUs = inventory.length;
 
-  fetchReport(from, to);
-  fetchTransactions(from, to);
-  fetchInventory(currentBar, to);
-}, [currentBar]);
-
-
-  const {
-    openingStock = 0,
-    purchases = 0,
-    closingStock = 0,
-    revenue = 0,
-    cogs = 0,
-    grossProfit = 0,
-    expenses = 0,
-    netProfit = 0,
-    byProduct = [],
-    dailyTrend = []
-  } = report || {};
-
-  let trendData = Array.isArray(dailyTrend) ? [...dailyTrend] : [];
-  if (!trendData.length && window.from && window.to && transactions.length) {
-    const start = new Date(window.from);
-    const end = new Date(window.to);
-    end.setHours(23, 59, 59, 999);
-
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateKey = d.toISOString().slice(0, 10);
-      const dayTxns = transactions.filter(tx => {
-        const t = new Date(tx.date);
-        return t >= new Date(dateKey) && t <= new Date(`${dateKey}T23:59:59.999Z`);
-      });
-      const dayRevenue = dayTxns.reduce((s, tx) => s + (tx.revenue || 0), 0);
-      const dayCogs = dayTxns.reduce((s, tx) => s + ((tx.quantity || 0) * (tx.product.costPrice || 0)), 0);
-      trendData.push({ date: dateKey, revenue: dayRevenue, cogs: dayCogs });
-    }
-  }
-
-  const topSelling = byProduct
-    .sort((a, b) => b.salesQty - a.salesQty)
-    .slice(0, 5)
-    .map(p => ({ name: p.productName, salesQty: p.salesQty }));
-
+  // 2) Low stock items
   const lowStockItems = inventory
     .filter(r => r.closing <= (r.product.lowStockThreshold || 0))
     .map(r => ({
       name: r.product.name,
       onHand: r.closing,
-      threshold: r.product.lowStockThreshold,
+      threshold: r.product.lowStockThreshold || 0,
       daysLeft: '—'
     }));
 
-  const COLORS = ['#4ade80', '#facc15', '#f87171', '#60a5fa', '#a78bfa'];
+  // 3) Top 5 fastest movers: salesQty / 7 days
+  const salesVelocity = inventory
+    .map(r => ({
+      name: r.product.name,
+      velocity: ((r.salesQty || 0) / 7)
+    }))
+    .sort((a, b) => b.velocity - a.velocity)
+    .slice(0, 5);
 
-  if (loading.report || loading.transactions || loading.inventory) {
-    return <div className="p-4 text-center">Loading dashboard&hellip;</div>;
+  // 4) Inventory value trend last 7 days
+  const valueTrend = [];
+  if (window.from && window.to && inventory.length) {
+    const dayMap = {};
+    inventory.forEach(r => {
+      if (!r.date) return;
+      const dObj = new Date(r.date);
+      if (isNaN(dObj.getTime())) return;
+      const dateKey = dObj.toISOString().slice(0, 10);
+      dayMap[dateKey] = (dayMap[dateKey] || 0) + ((r.closing || 0) * (r.costPrice || 0));
+    });
+    const start = new Date(window.from);
+    const end = new Date(window.to);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      valueTrend.push({ date: key, value: dayMap[key] || 0 });
+    }
   }
-  if (error.report || error.transactions || error.inventory) {
+
+  // 5) Bar performance comparison
+  const barComparison = bars.map(bar => {
+    const barTx = transactions.filter(tx => tx.bar?._id === bar._id);
+    const revenue = barTx.reduce((sum, tx) => sum + (tx.revenue || 0), 0);
+    const cogs = barTx.reduce(
+      (sum, tx) => sum + ((tx.quantity || 0) * (tx.product?.costPrice || 0)),
+      0
+    );
+    return { barName: bar.name, revenue, cogs };
+  });
+
+  // loading / error
+  if (loading.transactions || loading.inventory) {
+    return <div className="p-4 text-center">Loading dashboard…</div>;
+  }
+  if (error.transactions || error.inventory) {
     return (
       <div className="p-4 text-red-600 text-center">
-        {error.report || error.transactions || error.inventory}
+        {error.transactions || error.inventory}
       </div>
     );
   }
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
+      {/* Header & bar selector */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-0">
-          Inventory Dashboard
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Operations Dashboard</h1>
         <select
           value={currentBar}
           onChange={e => setCurrentBar(e.target.value)}
@@ -118,52 +118,64 @@ useEffect(() => {
       </div>
 
       <p className="text-sm text-gray-600">
-        Showing data from <strong>{window.from}</strong> through <strong>{window.to}</strong>
+        Showing data from <strong>{window.from}</strong> to{' '}
+        <strong>{window.to}</strong>
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Kpi title="Opening Stock" value={openingStock} prefix="$" />
-        <Kpi title="Purchases" value={purchases} prefix="$" />
-        <Kpi title="Closing Stock" value={closingStock} prefix="$" />
-        <Kpi title="Revenue" value={revenue} prefix="$" />
-        <Kpi title="COGS" value={cogs} prefix="$" />
-        <Kpi title="Net Profit" value={netProfit} prefix="$" />
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Kpi title="Total SKUs" value={totalSKUs} />
+        <Kpi title="Low Stock Alerts" value={lowStockItems.length} />
+        <Kpi title="Avg Daily Sales/Item" value={salesVelocity[0]?.velocity?.toFixed(1) || 0} suffix=" units/day" />
+        <Kpi title="Avg Inv. Value" value={ (valueTrend.reduce((s,d)=>s+d.value,0)/7).toFixed(2) } prefix="$" />
       </div>
 
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Daily Revenue vs COGS">
+        <Card title="Top 5 Fastest Movers">
+          <PieChart width={300} height={300}>
+            <Pie
+              data={salesVelocity}
+              dataKey="velocity"
+              nameKey="name"
+              cx="50%" cy="50%"
+              outerRadius={80}
+              label
+            >
+              {salesVelocity.map((_, i) => (
+                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip formatter={v => `${v.toFixed(1)} units/day`} />
+          </PieChart>
+        </Card>
+
+        <Card title="Inventory Value Trend (7d)">
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={trendData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+            <LineChart data={valueTrend}>
               <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#4ade80" />
-              <Line type="monotone" dataKey="cogs" name="COGS" stroke="#f87171" />
+              <YAxis tickFormatter={v => `$${v.toLocaleString()}`} />
+              <Tooltip formatter={v => `$${v.toLocaleString()}`} />
+              <Line type="monotone" dataKey="value" stroke="#3b82f6" name="Value" />
             </LineChart>
           </ResponsiveContainer>
         </Card>
+      </div>
 
-        <Card title="Top 5 Selling Products">
+      {bars.length > 1 && (
+        <Card title="Bar Performance Comparison">
           <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={topSelling}
-                dataKey="salesQty"
-                nameKey="name"
-                cx="50%" cy="50%"
-                outerRadius={80}
-                label
-              >
-                {topSelling.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
+            <BarChart data={barComparison}>
+              <XAxis dataKey="barName" />
+              <YAxis />
+              <Tooltip formatter={v => `$${v.toLocaleString()}`} />
+              <Legend />
+              <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
+              <Bar dataKey="cogs" fill="#ef4444" name="COGS" />
+            </BarChart>
           </ResponsiveContainer>
         </Card>
-      </div>
+      )}
 
       <Card title="Low Stock Items">
         <div className="overflow-x-auto">
@@ -171,17 +183,17 @@ useEffect(() => {
             <thead className="bg-gray-100">
               <tr>
                 {['Product', 'On Hand', 'Threshold', 'Days Left'].map(h => (
-                  <th key={h} className="px-3 py-2 whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-2">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {lowStockItems.map((it, idx) => (
                 <tr key={idx} className={it.onHand <= it.threshold ? 'bg-red-50' : ''}>
-                  <td className="px-3 py-2 whitespace-nowrap">{it.name}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{it.onHand}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{it.threshold}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{it.daysLeft}</td>
+                  <td className="px-3 py-2">{it.name}</td>
+                  <td className="px-3 py-2">{it.onHand}</td>
+                  <td className="px-3 py-2">{it.threshold}</td>
+                  <td className="px-3 py-2">{it.daysLeft}</td>
                 </tr>
               ))}
             </tbody>
@@ -194,13 +206,15 @@ useEffect(() => {
   );
 }
 
-function Kpi({ title, value, prefix = '' }) {
+const COLORS = ['#34d399','#fbbf24','#f87171','#60a5fa','#a78bfa'];
+
+function Kpi({ title, value, prefix = '', suffix = '' }) {
   return (
-    <div className="bg-white shadow rounded-lg p-4 flex flex-col">
+    <div className="bg-white shadow rounded-lg p-4">
       <span className="text-sm text-gray-600">{title}</span>
-      <span className="text-2xl font-semibold mt-1">
-        {prefix}{value?.toLocaleString()}
-      </span>
+      <div className="text-2xl font-semibold mt-1">
+        {prefix}{value}{suffix}
+      </div>
     </div>
   );
 }

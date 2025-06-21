@@ -29,17 +29,16 @@ export default function Sidebar() {
   const handleLogout = () => { logout(); navigate('/auth'); };
 
   return (
-    <aside className="w-16 md:w-64 bg-slate-800 text-gray-100 h-screen flex flex-col shadow-xl">
-      <div className="px-6 py-6 hidden md:block">
-        <h1 className="text-3xl font-extrabold text-gray-100">BarOwner</h1>
+    <aside className="fixed inset-y-0 left-0 w-16 md:w-64 bg-slate-800 text-gray-100 flex flex-col shadow-xl">
+      <div className="px-6 py-6 hidden md:block flex-none">
+        <h1 className="text-3xl font-extrabold">BarOwner</h1>
         <p className="text-sm text-gray-300 mt-1">Admin Dashboard</p>
       </div>
-
-      <nav className="flex-1 px-2 mt-4 space-y-1">
+      <nav className="flex-1 px-2 overflow-y-auto">
         {links.filter(l => l.roles.includes(role)).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end>
+          <NavLink key={to} to={to} end className="block">
             {({ isActive }) => (
-              <div className={`flex items-center p-2 rounded-lg transition  
+              <div className={`flex items-center p-2 rounded-lg transition-colors
                 ${isActive 
                   ? 'bg-indigo-500 text-white' 
                   : 'text-gray-300 hover:bg-slate-700 hover:text-white'}`}>
@@ -50,11 +49,10 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      <div className="px-6 py-4">
+      <div className="px-6 py-4 flex-none">
         <button
           onClick={handleLogout}
-          className="w-full py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-400 transition"
+          className="w-full py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-400 transition-colors"
         >
           Logout
         </button>

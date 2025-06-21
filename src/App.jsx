@@ -29,20 +29,16 @@ function HomeRedirect() {
   const { user } = useContext(AuthContext);
   const location = useLocation();
 
-  // While your AuthContext is still loading, you can render null or a spinner.
+  // While AuthContext is still initializing
   if (user === undefined) return null;
 
   if (!user) {
-    // Not logged in → auth page
     return <Navigate to="/auth" replace state={{ from: location }} />;
   }
 
-  // Logged in
-  if (user.role?.toLowerCase() === 'admin') {
-    return <Navigate to="/dashboard" replace state={{ from: location }} />;
-  } else {
-    return <Navigate to="/inventory" replace state={{ from: location }} />;
-  }
+  return user.role?.toLowerCase() === 'admin'
+    ? <Navigate to="/dashboard" replace state={{ from: location }} />
+    : <Navigate to="/inventory" replace state={{ from: location }} />;
 }
 
 export default function App() {
@@ -50,14 +46,17 @@ export default function App() {
     <AuthProvider>
       <AppContextProvider>
         <Router>
-          {/* Added a light background color for the whole app */}
+          {/* Entire app wrapper with light background */}
           <div className="flex flex-col h-screen bg-slate-50">
             <Navbar />
             <div className="flex flex-1">
+              {/* Fixed, full-height sidebar */}
               <Sidebar />
-              <main className="flex-1 overflow-auto p-4">
+
+              {/* Main content shifted over by sidebar width */}
+              <main className="flex-1 overflow-auto p-4 ml-16 md:ml-64">
                 <Routes>
-                  {/* Home: redirect based on authentication & role */}
+                  {/* Home route */}
                   <Route
                     path="/"
                     element={
@@ -70,7 +69,7 @@ export default function App() {
                   {/* Public auth page */}
                   <Route path="/auth" element={<AuthForm />} />
 
-                  {/* Dashboard - admin only */}
+                  {/* Admin-only dashboard */}
                   <Route
                     path="/dashboard"
                     element={
@@ -80,7 +79,7 @@ export default function App() {
                     }
                   />
 
-                  {/* Shared pages (authenticated users) */}
+                  {/* Shared pages for authenticated users */}
                   <Route
                     path="/inventory"
                     element={
@@ -132,7 +131,7 @@ export default function App() {
                     }
                   />
 
-                  {/* Fallback */}
+                  {/* Catch‑all → redirect home */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>
