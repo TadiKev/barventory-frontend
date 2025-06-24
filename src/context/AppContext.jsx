@@ -74,6 +74,27 @@ export function AppContextProvider({ children }) {
   const [transactions, setTransactions]     = useState([]);
   const [expenses, setExpenses]             = useState([]);
 
+  const [dashboard,       setDashboard]       = useState(null);
+  const [loadingDashboard,setLoadingDashboard]= useState(false);
+  const [errorDashboard,  setErrorDashboard]  = useState(null);
+
+  const fetchDashboard = useCallback(async (barId, from, to) => {
+    setLoadingDashboard(true);
+    setErrorDashboard(null);
+    try {
+      const { data } = await axios.get('/api/dashboard', {
+        params: { barId, from, to },
+        ...makeConfig()
+      });
+      setDashboard(data);
+    } catch (err) {
+      setErrorDashboard(err.response?.data?.error || err.message);
+      setDashboard(null);
+    } finally {
+      setLoadingDashboard(false);
+    }
+  }, [token]);
+
   // ─── Loading & Error ───
   const [loading, setLoading] = useState({
     bars: false, createBar: false, updateBar: false, deleteBar: false,
@@ -526,6 +547,10 @@ const fetchExpenses = useCallback(async (barId, from, to) => {
     createExpense,
     updateExpense,
     deleteExpense,
+    dashboard,
+    loadingDashboard,
+    errorDashboard,
+    fetchDashboard,
   }}>
     {children}
   </AppContext.Provider>

@@ -1,197 +1,188 @@
 // src/pages/Dashboard.jsx
 import React, { useContext, useEffect, useState } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell, BarChart, Bar
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar, Legend
 } from 'recharts';
 import { AppContext } from '../context/AppContext';
 import LowStockAlert from '../components/LowStockAlert';
 
+const COLORS = ['#34d399', '#fbbf24', '#f87171', '#60a5fa', '#a78bfa'];
+
 export default function Dashboard() {
   const {
-    bars = [],
+    bars,
     currentBar,
     setCurrentBar,
-    transactions = [],
-    fetchTransactions,
-    inventory = [],
-    fetchInventory,
-    loading,
-    error,
+    dashboard,
+    loadingDashboard,
+    errorDashboard,
+    fetchDashboard
   } = useContext(AppContext);
 
-  const [window, setWindow] = useState({ from: '', to: '' });
+  const [range, setRange] = useState({ from: '', to: '' });
 
-  // on bar change, load last 7 days
+  // initialize date range to last 7 days
   useEffect(() => {
-    if (!currentBar) return;
     const today = new Date();
-    const to = today.toISOString().slice(0, 10);
-    const fromD = new Date(today);
-    fromD.setDate(fromD.getDate() - 6);
-    const from = fromD.toISOString().slice(0, 10);
+    const to    = today.toISOString().slice(0,10);
+    const d0    = new Date(today);
+    d0.setDate(d0.getDate() - 6);
+    const from  = d0.toISOString().slice(0,10);
+    setRange({ from, to });
+  }, []);
 
-    setWindow({ from, to });
-    fetchTransactions(from, to);
-    fetchInventory(currentBar, to);
-  }, [currentBar, fetchTransactions, fetchInventory]);
-
-  // 1) Total SKUs
-  const totalSKUs = inventory.length;
-
-  // 2) Low stock items
-  const lowStockItems = inventory
-    .filter(r => r.closing <= (r.product.lowStockThreshold || 0))
-    .map(r => ({
-      name: r.product.name,
-      onHand: r.closing,
-      threshold: r.product.lowStockThreshold || 0,
-      daysLeft: '—'
-    }));
-
-  // 3) Top 5 fastest movers: salesQty / 7 days
-  const salesVelocity = inventory
-    .map(r => ({
-      name: r.product.name,
-      velocity: ((r.salesQty || 0) / 7)
-    }))
-    .sort((a, b) => b.velocity - a.velocity)
-    .slice(0, 5);
-
-  // 4) Inventory value trend last 7 days
-  const valueTrend = [];
-  if (window.from && window.to && inventory.length) {
-    const dayMap = {};
-    inventory.forEach(r => {
-      if (!r.date) return;
-      const dObj = new Date(r.date);
-      if (isNaN(dObj.getTime())) return;
-      const dateKey = dObj.toISOString().slice(0, 10);
-      dayMap[dateKey] = (dayMap[dateKey] || 0) + ((r.closing || 0) * (r.costPrice || 0));
-    });
-    const start = new Date(window.from);
-    const end = new Date(window.to);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = d.toISOString().slice(0, 10);
-      valueTrend.push({ date: key, value: dayMap[key] || 0 });
-    }
-  }
-
-  // 5) Bar performance comparison
-  const barComparison = bars.map(bar => {
-    // guard tx.bar for null
-    const barTx = transactions.filter(tx => tx.bar && tx.bar._id === bar._id);
-    const revenue = barTx.reduce((sum, tx) => sum + (tx.revenue || 0), 0);
-    const cogs = barTx.reduce(
-      (sum, tx) => sum + ((tx.quantity || 0) * (tx.product?.costPrice || 0)),
-      0
-    );
-    return { barName: bar.name, revenue, cogs };
-  });
+  // whenever bar or range changes, reload everything
+  useEffect(() => {
+    if (!range.from || !range.to) return;
+    fetchDashboard(currentBar, range.from, range.to);
+  }, [currentBar, range, fetchDashboard]);
 
   // loading / error
-  if (loading.transactions || loading.inventory) {
-    return <div className="p-4 text-center">Loading dashboard…</div>;
-  }
-  if (error.transactions || error.inventory) {
-    return (
-      <div className="p-4 text-red-600 text-center">
-        {error.transactions || error.inventory}
-      </div>
-    );
-  }
+  if (loadingDashboard) return <div className="p-4 text-center">Loading…</div>;
+  if (errorDashboard)  return <div className="p-4 text-red-600 text-center">{errorDashboard}</div>;
+  if (!dashboard)      return null;
+
+  // destructure the payload
+  const { kpis, barPerformance, topMovers, inventoryTrend } = dashboard;
+
+  // debug logs
+  console.group('📊 Dashboard Data');
+  console.log('Selected Bar:', currentBar);
+  console.log('Date Range:', range);
+  console.log('KPIs:', kpis);
+  console.log('Bar Performance:', barPerformance);
+  console.log('Top Movers:', topMovers);
+  console.log('Inventory Trend:', inventoryTrend);
+  console.groupEnd();
+
+  // compute low-stock items from KPIs or raw data if available
+  // if your controller also returns a lowStockList you can log/inspect it here.
+  // as fallback, derive from kpis or separate fetch:
+  // console.log('Raw inventory records (from AppContext):', inventory);
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
-      {/* Header & bar selector */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+      {/* Header & Controls */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
         <h1 className="text-2xl sm:text-3xl font-bold">Operations Dashboard</h1>
-        <select
-          value={currentBar}
-          onChange={e => setCurrentBar(e.target.value)}
-          className="border rounded p-2 w-full sm:w-auto"
-        >
-          <option value="all">All Bars</option>
-          {bars.map(b => (
-            <option key={b._id} value={b._id}>{b.name}</option>
-          ))}
-        </select>
+        <div className="flex space-x-2 items-center">
+          <select
+            value={currentBar}
+            onChange={e => setCurrentBar(e.target.value)}
+            className="border rounded p-2"
+          >
+            <option value="all">All Bars</option>
+            {bars.map(b => (
+              <option key={b._id} value={b._id}>{b.name}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={range.from}
+            onChange={e => setRange(r => ({ ...r, from: e.target.value }))}
+            className="border rounded p-1"
+          />
+          <span>to</span>
+          <input
+            type="date"
+            value={range.to}
+            onChange={e => setRange(r => ({ ...r, to: e.target.value }))}
+            className="border rounded p-1"
+          />
+        </div>
       </div>
-
-      <p className="text-sm text-gray-600">
-        Showing data from <strong>{window.from}</strong> to{' '}
-        <strong>{window.to}</strong>
-      </p>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Kpi title="Total SKUs" value={totalSKUs} />
-        <Kpi title="Low Stock Alerts" value={lowStockItems.length} />
-        <Kpi title="Avg Daily Sales/Item" value={salesVelocity[0]?.velocity?.toFixed(1) || 0} suffix=" units/day" />
-        <Kpi title="Avg Inv. Value" value={(valueTrend.reduce((s,d)=>s+d.value,0)/7).toFixed(2)} prefix="$" />
+        <Kpi title="Total SKUs"          value={kpis.totalSKUs} />
+        <Kpi title="Low Stock Alerts"   value={kpis.lowStockCount} />
+        <Kpi
+          title="Avg Daily Sales/Item"
+          value={kpis.avgDailySalesPerItem.toFixed(1)}
+          suffix=" units/day"
+        />
+        <Kpi
+          title="Avg Inv. Value"
+          value={kpis.avgInvValue.toFixed(2)}
+          prefix="$"
+        />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title="Top 5 Fastest Movers">
-          <PieChart width={300} height={300}>
-            <Pie
-              data={salesVelocity}
-              dataKey="velocity"
-              nameKey="name"
-              cx="50%" cy="50%"
-              outerRadius={80}
-              label
-            >
-              {salesVelocity.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={v => `${v.toFixed(1)} units/day`} />
-          </PieChart>
-        </Card>
-
-        <Card title="Inventory Value Trend (7d)">
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={valueTrend}>
-              <XAxis dataKey="date" />
-              <YAxis tickFormatter={v => `$${v.toLocaleString()}`} />
-              <Tooltip formatter={v => `$${v.toLocaleString()}`} />
-              <Line type="monotone" dataKey="value" stroke="#3b82f6" name="Value" />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-
-      {bars.length > 1 && (
+      {/* All-bars Performance */}
+      {currentBar === 'all' && bars.length > 1 && (
         <Card title="Bar Performance Comparison">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={barComparison}>
-              <XAxis dataKey="barName" />
-              <YAxis />
-              <Tooltip formatter={v => `$${v.toLocaleString()}`} />
-              <Legend />
-              <Bar dataKey="revenue" fill="#10b981" name="Revenue" />
-              <Bar dataKey="cogs" fill="#ef4444" name="COGS" />
-            </BarChart>
-          </ResponsiveContainer>
+          {barPerformance.length
+            ? <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={barPerformance}>
+                  <XAxis dataKey="barName" />
+                  <YAxis tickFormatter={v => `$${v.toLocaleString()}`} />
+                  <Tooltip formatter={v => `$${v.toLocaleString()}`} />
+                  <Legend />
+                  <Bar dataKey="totalRevenue" fill="#10b981" name="Revenue" />
+                  <Bar dataKey="totalCost"    fill="#ef4444" name="COGS"    />
+                </BarChart>
+              </ResponsiveContainer>
+            : <p className="text-center text-gray-500 p-4">No comparison data</p>
+          }
         </Card>
       )}
 
-      <LowStockAlert lowStockCount={lowStockItems.length} />
+      {/* Single-bar: Top Movers & Inventory Trend */}
+      {currentBar !== 'all' && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card title="Top 5 Fastest Movers">
+              {topMovers.length
+                ? <PieChart width={300} height={300}>
+                    <Pie
+                      data={topMovers}
+                      dataKey="velocity"
+                      nameKey="name"
+                      cx="50%" cy="50%"
+                      outerRadius={80}
+                      label
+                    >
+                      {topMovers.map((_,i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={v => `${v.toFixed(1)} units/day`} />
+                  </PieChart>
+                : <p className="text-center text-gray-500 p-4">No sales data</p>
+              }
+            </Card>
+
+            <Card title="Inventory Value Trend">
+              {inventoryTrend.length
+                ? <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={inventoryTrend}>
+                      <XAxis dataKey="date" />
+                      <YAxis tickFormatter={v => `$${v.toLocaleString()}`} />
+                      <Tooltip formatter={v => `$${v.toLocaleString()}`} />
+                      <Line type="monotone" dataKey="value" stroke="#3b82f6" name="Value" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                : <p className="text-center text-gray-500 p-4">No trend data</p>
+              }
+            </Card>
+          </div>
+
+          {/* Show low-stock alert */}
+          <LowStockAlert lowStockCount={kpis.lowStockCount} />
+        </>
+      )}
     </div>
   );
 }
 
-const COLORS = ['#34d399','#fbbf24','#f87171','#60a5fa','#a78bfa'];
-
 function Kpi({ title, value, prefix = '', suffix = '' }) {
   return (
-    <div className="bg-white shadow rounded-lg p-4">
+    <div className="bg-white shadow rounded-lg p-4 flex flex-col">
       <span className="text-sm text-gray-600">{title}</span>
-      <div className="text-2xl font-semibold mt-1">
-        {prefix}{value}{suffix}
-      </div>
+      <span className="text-2xl font-semibold mt-1">
+        {prefix}{value.toLocaleString()}{suffix}
+      </span>
     </div>
   );
 }
