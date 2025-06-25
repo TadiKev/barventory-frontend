@@ -1,6 +1,12 @@
 // src/App.jsx
-import React, { useContext } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useContext, useState } from 'react';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from 'react-router-dom';
 
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { AppContextProvider } from './context/AppContext';
@@ -36,25 +42,35 @@ function HomeRedirect() {
     return <Navigate to="/auth" replace state={{ from: location }} />;
   }
 
+  // If role string comparisons: ensure lowercase
   return user.role?.toLowerCase() === 'admin'
     ? <Navigate to="/dashboard" replace state={{ from: location }} />
     : <Navigate to="/inventory" replace state={{ from: location }} />;
 }
 
 export default function App() {
+  // State to control sidebar visibility on small screens
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const openSidebar = () => setSidebarOpen(true);
+  const closeSidebar = () => setSidebarOpen(false);
+
   return (
     <AuthProvider>
       <AppContextProvider>
         <Router>
-          {/* Entire app wrapper with light background */}
+          {/* Entire app wrapper */}
           <div className="flex flex-col h-screen bg-slate-50">
-            <Navbar />
-            <div className="flex flex-1">
-              {/* Fixed, full-height sidebar */}
-              <Sidebar />
+            {/* Navbar: pass handler to open sidebar */}
+            <Navbar onMenuClick={openSidebar} />
 
-              {/* Main content shifted over by sidebar width */}
-              <main className="flex-1 overflow-auto p-4 ml-16 md:ml-64">
+            {/* Content area: sidebar + main */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Sidebar: receives isOpen & onClose */}
+              <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
+
+              {/* Main content: flex-1 so it fills remaining space; no static ml, since Sidebar is fixed on small and static in flow on md+ */}
+              <main className="flex-1 overflow-auto p-4">
                 <Routes>
                   {/* Home route */}
                   <Route
@@ -131,7 +147,7 @@ export default function App() {
                     }
                   />
 
-                  {/* Catch‑all → redirect home */}
+                  {/* Catch-all → redirect home */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>
