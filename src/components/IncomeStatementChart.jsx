@@ -1,4 +1,5 @@
 // src/components/IncomeStatementChart.jsx
+
 import React from "react";
 import { Bar } from "react-chartjs-2";
 import {
@@ -30,6 +31,7 @@ export default function IncomeStatementChart({ data }) {
 
   const options = {
     responsive: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -43,13 +45,24 @@ export default function IncomeStatementChart({ data }) {
         beginAtZero: true,
         ticks: {
           callback: v => `$${v.toLocaleString('en-US')}`,
+          // reduce font size on small screens
+          font: {
+            size: window.innerWidth < 768 ? 10 : 12
+          }
         },
       },
+      x: {
+        ticks: {
+          font: {
+            size: window.innerWidth < 768 ? 10 : 12
+          }
+        }
+      }
     },
   };
 
   return (
-    <div className="mx-auto" style={{ maxWidth: 600 }}>
+    <div className="mx-auto w-full max-w-xs sm:max-w-md md:max-w-lg h-64 sm:h-80 md:h-96">
       <Bar data={chartData} options={options} />
     </div>
   );
