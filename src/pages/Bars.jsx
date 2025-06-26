@@ -1,3 +1,5 @@
+// src/pages/Bars.jsx
+
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 
@@ -40,13 +42,18 @@ export default function Bars() {
   };
 
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold mb-4">Manage Bars</h2>
+    <div className="p-2 sm:p-4 md:p-6">
+      <h2 className="text-lg sm:text-2xl md:text-3xl font-bold mb-4">
+        Manage Bars
+      </h2>
 
-      <form onSubmit={handleAddOrEdit} className="mb-6 flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0">
+      <form
+        onSubmit={handleAddOrEdit}
+        className="mb-6 flex flex-col sm:flex-row sm:space-x-2 space-y-2 sm:space-y-0 text-xs sm:text-sm"
+      >
         <input
           name="name"
-          className="border rounded px-3 py-2 flex-1"
+          className="border rounded px-2 py-1 flex-1 text-xs sm:text-sm"
           placeholder="Bar Name"
           value={form.name}
           onChange={handleChange}
@@ -54,14 +61,14 @@ export default function Bars() {
         />
         <input
           name="location"
-          className="border rounded px-3 py-2 flex-1"
+          className="border rounded px-2 py-1 flex-1 text-xs sm:text-sm"
           placeholder="Location (optional)"
           value={form.location}
           onChange={handleChange}
         />
         <button
           type="submit"
-          className="bg-pink-500 text-white px-4 py-2 rounded hover:bg-pink-600 transition"
+          className="bg-pink-500 text-white px-2 py-1 rounded hover:bg-pink-600 transition text-xs sm:text-sm"
         >
           {editingId ? 'Save Changes' : 'Add Bar'}
         </button>
@@ -69,44 +76,46 @@ export default function Bars() {
           <button
             type="button"
             onClick={() => { setEditingId(null); setForm({ name: '', location: '' }); }}
-            className="bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400 transition"
+            className="bg-gray-300 text-gray-700 px-2 py-1 rounded hover:bg-gray-400 transition text-xs sm:text-sm"
           >
             Cancel
           </button>
         )}
       </form>
 
-      <table className="min-w-full bg-white shadow rounded-lg overflow-hidden">
-        <thead className="bg-pink-100">
-          <tr>
-            <th className="px-4 py-2 text-left">Name</th>
-            <th className="px-4 py-2 text-left">Location</th>
-            <th className="px-4 py-2 text-left">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bars.map(bar => (
-            <tr key={bar._id} className="border-t hover:bg-gray-50">
-              <td className="px-4 py-2">{bar.name}</td>
-              <td className="px-4 py-2">{bar.location}</td>
-              <td className="px-4 py-2 space-x-2">
-                <button
-                  onClick={() => startEdit(bar)}
-                  className="text-blue-600 hover:underline"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(bar._id)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
-              </td>
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white shadow rounded-lg overflow-hidden text-xs sm:text-sm">
+          <thead className="bg-pink-100">
+            <tr>
+              <th className="px-3 py-2 text-left">Name</th>
+              <th className="px-3 py-2 text-left">Location</th>
+              <th className="px-3 py-2 text-left">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {bars.map(bar => (
+              <tr key={bar._id} className="border-t hover:bg-gray-50">
+                <td className="px-3 py-2">{bar.name}</td>
+                <td className="px-3 py-2">{bar.location}</td>
+                <td className="px-3 py-2 space-x-2">
+                  <button
+                    onClick={() => startEdit(bar)}
+                    className="text-blue-600 hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(bar._id)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
-  );
+);
 }

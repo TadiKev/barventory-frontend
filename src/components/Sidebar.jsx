@@ -53,8 +53,8 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Header with title and close button on mobile */}
         <div className="flex items-center justify-between px-6 py-4 md:block">
           <div>
-            <h1 className="text-2xl font-extrabold">BarOwner</h1>
-            <p className="text-sm text-gray-300 mt-1 hidden md:block">Admin Dashboard</p>
+            <h1 className="text-2xl font-extrabold">Thomlegends</h1>
+           
           </div>
           {/* Close button only on small screens */}
           <button
