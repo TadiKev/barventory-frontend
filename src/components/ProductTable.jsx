@@ -2,6 +2,7 @@
 
 import React, { useContext, useEffect, useState } from 'react';
 import { AppContext } from '../context/AppContext';
+import api from '../utils/api';
 
 export default function ProductTable() {
   const {
@@ -32,27 +33,25 @@ export default function ProductTable() {
 
   // Fetch products (dev vs prod URL)
   const fetchProducts = async (page = 1, pageSize = 10) => {
-    try {
-      const base = import.meta.env.DEV || !import.meta.env.VITE_API_URL
-        ? ''
-        : import.meta.env.VITE_API_URL;
-      const url = import.meta.env.DEV
-        ? `/api/products?page=${page}&pageSize=${pageSize}`
-        : `${base}/api/products?page=${page}&pageSize=${pageSize}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setProducts(data.products);
-      setPagination({
-        page: data.page,
-        pageSize: data.pageSize,
-        total: data.total,
-        totalPages: data.totalPages,
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  try {
+    // this will automatically send your Bearer token
+    const res = await api.get('/products', {
+      params: { page, pageSize }
+    });
+    const data = res.data;
+
+    setProducts(data.products);
+    setPagination({
+      page: data.page,
+      pageSize: data.pageSize,
+      total: data.total,
+      totalPages: data.totalPages,
+    });
+  } catch (err) {
+    console.error(err);
+  }
+};
+
 
   useEffect(() => {
     fetchProducts(pagination.page, pagination.pageSize);
