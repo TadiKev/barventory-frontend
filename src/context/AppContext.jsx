@@ -2,6 +2,7 @@
 
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
+import api from '../utils/api'; 
 import { AuthContext } from './AuthContext';
 
 // In dev, use empty so Vite proxy handles it; in prod, use your Render URL
@@ -24,14 +25,56 @@ export function AppContextProvider({ children }) {
   });
 
 
-  // ─── Bars & Current Bar ───
-  const [bars, setBars] = useState([]);
-  const [currentBar, setCurrentBar] = useState(() =>
-    window.localStorage.getItem('currentBar') || 'all'
-  );
-  useEffect(() => {
-    window.localStorage.setItem('currentBar', currentBar);
-  }, [currentBar]);
+const [bars, setBars] = useState([]);
+const [currentBar, setCurrentBar] = useState(() => {
+  // Employee → lock to their assigned bar ID
+  if (user?.role === 'employee' && user.bar?.id) {
+    return user.bar.id;
+  }
+  // Admin → last‑selected or “all”
+  return window.localStorage.getItem('currentBar') || 'all';
+});
+
+// Persist currentBar
+useEffect(() => {
+  window.localStorage.setItem('currentBar', currentBar);
+}, [currentBar]);
+
+// Fetch bars once we know who’s logged in
+useEffect(() => {
+  if (!user) return;
+
+  if (user.role === 'admin') {
+    // Admin: get all bars
+    api.get('/bars')
+      .then(({ data }) => {
+        setBars(data);
+        // if they've never selected one, pick the first for them
+        if (!window.localStorage.getItem('currentBar') && data.length) {
+          setCurrentBar(data[0]._id);
+        }
+      })
+      .catch(err => console.error('Failed to load bars', err));
+  } else {
+    // Employee → only their own bar
+    if (user.bar?.id) {
+      api.get(`/bars/${user.bar.id}`)
+        .then(({ data }) => {
+          setBars([data]);
+          setCurrentBar(data._id);
+        })
+        .catch(err => {
+          console.error('Failed to load employee bar', err);
+          setBars([]);
+          setCurrentBar('');
+        });
+    } else {
+      setBars([]);
+      setCurrentBar('');
+    }
+  }
+}, [user, token]);
+
 
   // ─── Selected Date ───
   const [selectedDate, setSelectedDate] = useState(() =>
@@ -117,18 +160,30 @@ export function AppContextProvider({ children }) {
 
   // ─── BAR CRUD ───
   const fetchBars = async () => {
-    setLoading(l => ({ ...l, bars: true }));
-    try {
-      const { data } = await axios.get('/api/bars');
+  setLoading(l => ({ ...l, bars: true }));
+  try {
+    const { data } = await api.get('/bars'); // <-- using your api client
+
+    // ADMIN: keep them all
+    if (user.role === 'admin') {
       setBars(data);
-      if (data.length && currentBar === 'all') setCurrentBar(data[0]._id);
-      setError(e => ({ ...e, bars: null }));
-    } catch (err) {
-      setError(e => ({ ...e, bars: err.message }));
-    } finally {
-      setLoading(l => ({ ...l, bars: false }));
     }
-  };
+    // EMPLOYEE: only their own
+    else {
+      const mine = data.find(b => b._id === user.bar);
+      setBars(mine ? [mine] : []);
+      // also ensure currentBar points at theirs:
+      setCurrentBar(mine ? mine._id : 'all');
+    }
+
+    setError(e => ({ ...e, bars: null }));
+  } catch (err) {
+    setError(e => ({ ...e, bars: err.response?.data?.error || err.message }));
+  } finally {
+    setLoading(l => ({ ...l, bars: false }));
+  }
+};
+
 
   const fetchReport = useCallback(async (from, to) => {
   setLoading(l => ({ ...l, report: true }));
@@ -192,20 +247,23 @@ export function AppContextProvider({ children }) {
   };
 
   // ─── PRODUCT CRUD ───
-  const fetchProducts = async (page = 1, pageSize = 1000) => {
-    setLoading(l => ({ ...l, products: true }));
-    try {
-      const res = await axios.get('/api/products', {
-        params: { bar: currentBar, page, pageSize }
-      });
-      setProducts(Array.isArray(res.data.products) ? res.data.products : []);
-      setError(e => ({ ...e, products: null }));
-    } catch (err) {
-      setError(e => ({ ...e, products: err.message }));
-    } finally {
-      setLoading(l => ({ ...l, products: false }));
-    }
-  };
+  // ─── PRODUCT CRUD ───
+const fetchProducts = async (page = 1, pageSize = 1000) => {
+  setLoading(l => ({ ...l, products: true }));
+  try {
+    // use your api.js client so the Authorization header is auto‐attached
+    const res = await api.get('/products', {
+      params: { bar: currentBar, page, pageSize }
+    });
+    setProducts(Array.isArray(res.data.products) ? res.data.products : []);
+    setError(e => ({ ...e, products: null }));
+  } catch (err) {
+    setError(e => ({ ...e, products: err.response?.data?.error || err.message }));
+  } finally {
+    setLoading(l => ({ ...l, products: false }));
+  }
+};
+
 
   const createProduct = async (prod) => {
     setLoading(l => ({ ...l, createProduct: true }));

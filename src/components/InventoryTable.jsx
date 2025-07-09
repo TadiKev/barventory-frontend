@@ -11,15 +11,13 @@ export default function InventoryTable({ date: propDate }) {
   const isEmployee = roleLower === 'employee';
   const isAdmin    = roleLower === 'admin';
 
-  // get YYYY-MM-DD for today
   const todayStr = new Date().toISOString().slice(0, 10);
-  // default to today if no propDate
   const date     = propDate || todayStr;
   const isToday  = date === todayStr;
 
   const {
-    currentBar,
     bars,
+    currentBar,
     inventory,
     fetchInventory,
     bulkUpsertInventory,
@@ -36,7 +34,7 @@ export default function InventoryTable({ date: propDate }) {
   const [transferModal, setTransferModal] = useState({
     open: false,
     productId: null,
-    qty: 1,
+    qty: '',
     toBar: '',
   });
 
@@ -54,9 +52,9 @@ export default function InventoryTable({ date: propDate }) {
     if (currentBar && date) {
       fetchInventory(currentBar, date).catch(console.error);
     }
-  }, [currentBar, date]);
+  }, [currentBar, date, fetchInventory]);
 
-  // Row editing
+  // Row editing helpers (unchanged) …
   const startEdit = rec => {
     if (isEmployee && !isToday) return;
     setEditedRecords(prev => ({
@@ -95,13 +93,17 @@ export default function InventoryTable({ date: propDate }) {
     setEditedRecords({});
   };
 
-  // Transfer modal
-  const openTransferModal  = productId => setTransferModal({ open: true, productId, qty: 1, toBar: '' });
-  const closeTransferModal = ()          => setTransferModal({ open: false, productId: null, qty: 1, toBar: '' });
-  const submitTransfer     = async ()    => {
+  // Transfer modal controls
+  const openTransferModal  = productId =>
+    setTransferModal({ open: true, productId, qty: '', toBar: '' });
+  const closeTransferModal = () =>
+    setTransferModal({ open: false, productId: null, qty: '', toBar: '' });
+  const submitTransfer = async e => {
+    e.preventDefault();
     const { productId, qty, toBar } = transferModal;
-    if (!productId || !toBar || qty < 1) return;
-    await requestTransfer({ productId, qty, fromBar: currentBar, toBar });
+    const qtyNum = parseInt(qty, 10);
+    if (!productId || !toBar || isNaN(qtyNum) || qtyNum < 1) return;
+    await requestTransfer({ productId, qty: qtyNum, fromBar: currentBar, toBar });
     await fetchInventory(currentBar, date);
     closeTransferModal();
   };
@@ -111,7 +113,7 @@ export default function InventoryTable({ date: propDate }) {
     .filter(r => r.product.name.toLowerCase().includes(searchTerm.toLowerCase()))
     .sort((a, b) => a.product.name.localeCompare(b.product.name));
 
-  // ENRICH with guaranteed salesQty & salesAmt
+  // Enrich with sales & amounts
   const enriched = displayed.map(r => {
     const o     = r.opening       || 0;
     const re    = r.receivedQty   || 0;
@@ -119,10 +121,8 @@ export default function InventoryTable({ date: propDate }) {
     const to    = r.transferOutQty || 0;
     const m     = r.manualClosing != null ? r.manualClosing : 0;
     const price = r.sellingPrice ?? r.product.sellingPrice ?? 0;
-
     const salesQty = o + re + ti - to - m;
     const salesAmt = salesQty * price;
-
     return { ...r, salesQty, salesAmt };
   });
 
@@ -131,14 +131,12 @@ export default function InventoryTable({ date: propDate }) {
   const cashVariance      = cashCount - totalExpectedCash;
 
   if (loading.inventory) return (
-    <div className="p-4 flex justify-center">
-      <Spinner />
-    </div>
+    <div className="p-4 flex justify-center"><Spinner /></div>
   );
   if (error.inventory) return (
     <div className="p-4 text-red-600 text-sm">
       {error.inventory.includes('Network Error')
-        ? 'Cannot reach server—check your API base URL or proxy.'
+        ? 'Cannot reach server—check API base URL or proxy.'
         : error.inventory}
     </div>
   );
@@ -169,25 +167,21 @@ export default function InventoryTable({ date: propDate }) {
         />
       </div>
 
-      {/* Table */}
+      {/* Inventory table */}
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Product</th>
-              <th className="px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Opening</th>
-              <th className="px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Received</th>
-              {/* Hide on xs: Transfer In */}
-              <th className="hidden sm:table-cell px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">In</th>
-              <th className="px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Sales</th>
-              {/* Hide on xs: Transfer Out */}
-              <th className="hidden sm:table-cell px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Out</th>
-              {/* Hide on xs: Expected */}
-              <th className="hidden sm:table-cell px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Expected</th>
-              <th className="px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Manual</th>
-              {/* Hide on xs: Variance */}
-              <th className="hidden sm:table-cell px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Variance</th>
-              <th className="px-2 py-1 text-left text-xs sm:text-sm font-medium text-gray-600">Actions</th>
+              <th className="px-2 py-1 text-left">Product</th>
+              <th className="px-2 py-1 text-left">Opening</th>
+              <th className="px-2 py-1 text-left">Received</th>
+              <th className="hidden sm:table-cell px-2 py-1 text-left">In</th>
+              <th className="px-2 py-1 text-left">Sales</th>
+              <th className="hidden sm:table-cell px-2 py-1 text-left">Out</th>
+              <th className="hidden sm:table-cell px-2 py-1 text-left">Expected</th>
+              <th className="px-2 py-1 text-left">Manual</th>
+              <th className="hidden sm:table-cell px-2 py-1 text-left">Variance</th>
+              <th className="px-2 py-1 text-left">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -199,72 +193,61 @@ export default function InventoryTable({ date: propDate }) {
               const received= ed?.receivedQty ?? r.receivedQty  ?? 0;
               const inT     = r.transferInQty  ?? 0;
               const outT    = r.transferOutQty ?? 0;
-              const manual  = isEd
-                ? ed.manualClosing
-                : (r.manualClosing ?? null);
+              const manual  = isEd ? ed.manualClosing : (r.manualClosing ?? null);
 
-              // recalc in-row values
               const sales    = opening + received + inT - outT - (manual ?? 0);
               const expected = opening + received + inT - (sales + outT);
-              const variance = manual != null
-                ? manual - expected
-                : r.variance;
-
-              const canEdit = isAdmin || (isEmployee && isToday);
+              const variance = manual != null ? manual - expected : 0;
+              const canEdit  = isAdmin || (isEmployee && isToday);
 
               return (
-                <tr key={id} className={`hover:bg-gray-50 ${variance < 0 ? 'bg-red-50' : ''}`}>
-                  <td className="px-2 py-1 text-xs sm:text-sm">{r.product.name}</td>
-                  <td className="px-2 py-1 text-xs sm:text-sm">{opening}</td>
-                  <td className="px-2 py-1 text-xs sm:text-sm">
-                    {canEdit && isEd
-                      ? <input
-                          type="number"
-                          className="w-12 sm:w-20 border rounded px-1 py-0.5 text-xs sm:text-sm"
-                          value={received}
-                          onChange={e => updateField(id, 'receivedQty', e.target.value)}
-                        />
-                      : received
-                    }
+                <tr key={id} className={`${variance<0?'bg-red-50':''} hover:bg-gray-50`}>
+                  <td className="px-2 py-1">{r.product.name}</td>
+                  <td className="px-2 py-1">{opening}</td>
+                  <td className="px-2 py-1">
+                    {canEdit && isEd ? (
+                      <input
+                        type="number"
+                        className="w-12 sm:w-20 border rounded px-1 py-0.5"
+                        value={received}
+                        onChange={e => updateField(id,'receivedQty',e.target.value)}
+                      />
+                    ) : received}
                   </td>
-                  <td className="hidden sm:table-cell px-2 py-1 text-xs sm:text-sm">{inT}</td>
-                  <td className="px-2 py-1 text-xs sm:text-sm font-semibold">{sales}</td>
-                  <td className="hidden sm:table-cell px-2 py-1 text-xs sm:text-sm">{outT}</td>
-                  <td className="hidden sm:table-cell px-2 py-1 text-xs sm:text-sm">{expected}</td>
-                  <td className="px-2 py-1 text-xs sm:text-sm">
-                    {canEdit && isEd
-                      ? <input
-                          type="number"
-                          className="w-12 sm:w-20 border rounded px-1 py-0.5 text-xs sm:text-sm"
-                          value={manual ?? ''}
-                          onChange={e => updateField(id, 'manualClosing', e.target.value)}
-                        />
-                      : (manual != null ? manual : '-')
-                    }
+                  <td className="hidden sm:table-cell px-2 py-1">{inT}</td>
+                  <td className="px-2 py-1 font-semibold">{sales}</td>
+                  <td className="hidden sm:table-cell px-2 py-1">{outT}</td>
+                  <td className="hidden sm:table-cell px-2 py-1">{expected}</td>
+                  <td className="px-2 py-1">
+                    {canEdit && isEd ? (
+                      <input
+                        type="number"
+                        className="w-12 sm:w-20 border rounded px-1 py-0.5"
+                        value={manual ?? ''}
+                        onChange={e => updateField(id,'manualClosing',e.target.value)}
+                      />
+                    ) : (manual!=null?manual:'-')}
                   </td>
-                  <td className={`hidden sm:table-cell px-2 py-1 text-xs sm:text-sm ${variance < 0 ? 'text-red-600 font-semibold' : 'text-green-600'}`}>
-                    {variance != null ? variance : '-'}
+                  <td className="hidden sm:table-cell px-2 py-1">
+                    <span className={`${variance<0?'text-red-600':'text-green-600'}`}>
+                      {variance}
+                    </span>
                   </td>
                   <td className="px-2 py-1 space-x-1">
-                    {canEdit && (
-                      isEd
-                        ? <button onClick={() => cancelEdit(id)} className="text-xs sm:text-sm text-gray-600">
-                            Cancel
-                          </button>
-                        : <button onClick={() => startEdit(r)} className="text-xs sm:text-sm text-blue-600">
-                            Edit
-                          </button>
+                    {canEdit && (isEd
+                      ? <button onClick={()=>cancelEdit(id)} className="text-gray-600">Cancel</button>
+                      : <button onClick={()=>startEdit(r)} className="text-blue-600">Edit</button>
                     )}
-                    <button onClick={() => openTransferModal(id)} className="text-xs sm:text-sm text-indigo-600 hover:underline">
+                    <button onClick={()=>openTransferModal(id)} className="text-indigo-600 hover:underline">
                       Transfer
                     </button>
                   </td>
                 </tr>
               );
             })}
-            {enriched.length === 0 && (
+            {enriched.length===0 && (
               <tr>
-                <td colSpan={10} className="px-2 py-4 text-center text-gray-500 text-xs sm:text-sm">
+                <td colSpan={10} className="px-2 py-4 text-center text-gray-500">
                   No products match “{searchTerm}”
                 </td>
               </tr>
@@ -275,84 +258,100 @@ export default function InventoryTable({ date: propDate }) {
 
       {/* Transfer Modal */}
       {transferModal.open && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 px-2">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-sm">
-            <div className="px-4 py-3 border-b">
-              <h2 className="text-base sm:text-lg font-medium">Request Transfer</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center p-2">
+          <form
+            onSubmit={submitTransfer}
+            className="bg-white rounded-lg w-full max-w-xs p-3 sm:p-4 space-y-3"
+          >
+            <h2 className="text-base font-medium">Transfer Product</h2>
+            <div>
+              <label className="block mb-1 text-sm">Destination Bar</label>
+              <select
+                required
+                className="w-full border rounded px-2 py-1"
+                value={transferModal.toBar}
+                onChange={e => setTransferModal(tm=>({...tm,toBar:e.target.value}))}
+              >
+                <option value="">Select Bar</option>
+                {bars.filter(b=>b._id!==currentBar).map(b=>(
+                  <option key={b._id} value={b._id}>{b.name}</option>
+                ))}
+              </select>
             </div>
-            <div className="p-4 space-y-3">
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700">Destination Bar</label>
-                <select
-                  className="mt-1 block w-full border rounded px-2 py-1 text-xs sm:text-sm"
-                  value={transferModal.toBar}
-                  onChange={e => setTransferModal(tm => ({ ...tm, toBar: e.target.value }))}
-                >
-                  <option value="">— Select Bar —</option>
-                  {bars.filter(b => b._id !== currentBar).map(b => (
-                    <option key={b._id} value={b._id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700">Quantity</label>
-                <input
-                  type="number"
-                  min="1"
-                  className="mt-1 block w-full border rounded px-2 py-1 text-xs sm:text-sm"
-                  value={transferModal.qty}
-                  onChange={e => setTransferModal(tm => ({ ...tm, qty: Number(e.target.value) || 1 }))}
-                />
-              </div>
+            <div>
+              <label className="block mb-1 text-sm">Quantity</label>
+              <input
+                type="number"
+                min="1"
+                value={transferModal.qty}
+                onChange={e=>setTransferModal(tm=>({...tm,qty:e.target.value}))}
+                className="w-full border rounded px-2 py-1"
+                placeholder="0"
+              />
             </div>
-            <div className="px-4 py-3 border-t flex justify-end space-x-2">
+            <div className="flex justify-end space-x-2">
               <button
+                type="button"
                 onClick={closeTransferModal}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-xs sm:text-sm hover:bg-gray-300"
+                className="px-3 py-1 bg-gray-200 rounded"
               >
                 Cancel
               </button>
               <button
-                onClick={submitTransfer}
-                className="px-3 py-1 bg-indigo-600 text-white rounded text-xs sm:text-sm hover:bg-indigo-700"
+                type="submit"
+                className="px-3 py-1 bg-indigo-600 text-white rounded"
               >
                 Submit
               </button>
             </div>
+          </form>
+        </div>
+      )}
+
+            {/* Day-End Summary (Admins + Employees see Expected Cash) */}
+      {(isAdmin || isEmployee) && (
+        <div className="p-4 border-t mt-4">
+          <h3 className="text-lg font-semibold mb-2">Day‑End Summary</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Expected Cash: everyone */}
+            <div>
+              <label className="block text-sm">Expected Cash</label>
+              <div className="mt-1 text-xl font-bold">
+                ${totalExpectedCash.toFixed(2)}
+              </div>
+            </div>
+
+            {/* Actual Cash Collected: only admins can edit, employees just view “—” */}
+            <div>
+              <label className="block text-sm">Actual Cash Collected</label>
+              {isAdmin ? (
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={cashCount}
+                  onChange={e => setCashCount(Number(e.target.value))}
+                  onBlur={() => saveCashCount(cashCount)}
+                  className="mt-1 w-full border rounded px-2 py-1"
+                />
+              ) : (
+                <div className="mt-1 text-lg">—</div>
+              )}
+            </div>
+
+            {/* Variance: only admins */}
+            {isAdmin && (
+              <div>
+                <label className="block text-sm">Variance</label>
+                <div className={`mt-1 text-xl font-bold ${cashVariance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  ${cashVariance.toFixed(2)}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Day-End Summary: admin only */}
-      {isAdmin && (
-        <div className="p-4 border-t mt-4">
-          <h3 className="text-base sm:text-lg font-semibold mb-2">Day-End Summary</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-full sm:max-w-md">
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700">Expected Cash</label>
-              <div className="mt-1 text-lg sm:text-xl font-bold">${totalExpectedCash.toFixed(2)}</div>
-            </div>
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700">Actual Cash Collected</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={cashCount}
-                onChange={e => setCashCount(Number(e.target.value))}
-                onBlur={() => saveCashCount(cashCount)}
-                className="mt-1 block w-full border rounded px-2 py-1 text-xs sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700">Variance</label>
-              <div className={`mt-1 text-lg sm:text-xl font-bold ${cashVariance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                ${cashVariance.toFixed(2)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
