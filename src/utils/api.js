@@ -3,8 +3,8 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.DEV
-    ? '/api'                    // dev: proxy → localhost:5000/api
-    : import.meta.env.VITE_API_URL  // prod: your real backend URL
+    ? '/api'                                       
+    : `${import.meta.env.VITE_API_URL}/api`       
 });
 
 api.interceptors.request.use(cfg => {
