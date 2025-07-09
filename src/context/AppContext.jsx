@@ -246,23 +246,45 @@ useEffect(() => {
     }
   };
 
-  // ─── PRODUCT CRUD ───
-  // ─── PRODUCT CRUD ───
-const fetchProducts = async (page = 1, pageSize = 1000) => {
-  setLoading(l => ({ ...l, products: true }));
-  try {
-    // use your api.js client so the Authorization header is auto‐attached
-    const res = await api.get('/products', {
-      params: { bar: currentBar, page, pageSize }
-    });
-    setProducts(Array.isArray(res.data.products) ? res.data.products : []);
-    setError(e => ({ ...e, products: null }));
-  } catch (err) {
-    setError(e => ({ ...e, products: err.response?.data?.error || err.message }));
-  } finally {
-    setLoading(l => ({ ...l, products: false }));
-  }
-};
+ // In src/context/AppContext.jsx
+
+const fetchProducts = useCallback(
+  async (page = 1, pageSize = 1000) => {
+    // turn on loading state for products
+    setLoading(l => ({ ...l, products: true }));
+    try {
+      // call your axios client (auto‑attaches the Bearer token)
+      const res = await api.get('/products', {
+        params: { bar: currentBar, page, pageSize }
+      });
+
+      // pull out the API response
+      const data = res.data;
+
+      // update only the products array in state
+      setProducts(Array.isArray(data.products) ? data.products : []);
+
+      // clear any previous error
+      setError(e => ({ ...e, products: null }));
+
+      // return the raw payload to callers
+      return data;
+    } catch (err) {
+      // capture error in state
+      setError(e => ({
+        ...e,
+        products: err.response?.data?.error || err.message
+      }));
+      // re‑throw so components know the call failed
+      throw err;
+    } finally {
+      // turn off loading flag
+      setLoading(l => ({ ...l, products: false }));
+    }
+  },
+  [currentBar, token]  // re-create this callback if bar or token changes
+);
+
 
 
   const createProduct = async (prod) => {

@@ -2,7 +2,6 @@
 
 import React, { useContext, useEffect, useState } from 'react';
 import { AppContext } from '../context/AppContext';
-import api from '../utils/api';
 
 export default function ProductTable() {
   const {
@@ -11,6 +10,7 @@ export default function ProductTable() {
     createProduct,
     updateProduct,
     deleteProduct,
+    fetchProducts,    // ← pulled in from context
   } = useContext(AppContext);
 
   // Add‐product form state
@@ -31,31 +31,26 @@ export default function ProductTable() {
     totalPages: 1,
   });
 
-  // Fetch products (dev vs prod URL)
-  const fetchProducts = async (page = 1, pageSize = 10) => {
-  try {
-    // this will automatically send your Bearer token
-    const res = await api.get('/products', {
-      params: { page, pageSize }
-    });
-    const data = res.data;
-
-    setProducts(data.products);
-    setPagination({
-      page: data.page,
-      pageSize: data.pageSize,
-      total: data.total,
-      totalPages: data.totalPages,
-    });
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-
+  
+  // Load products on mount & when page/pageSize change
   useEffect(() => {
-    fetchProducts(pagination.page, pagination.pageSize);
-  }, [pagination.page, pagination.pageSize]);
+    (async () => {
+      try {
+        const data = await fetchProducts(pagination.page, pagination.pageSize);
+        if (data) {
+          setProducts(data.products);
+          setPagination({
+            page: data.page,
+            pageSize: data.pageSize,
+            total: data.total,
+            totalPages: data.totalPages,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load products:', err);
+      }
+    })();
+  }, [pagination.page, pagination.pageSize, fetchProducts]);
 
   // Handle add
   const handleAdd = async e => {
@@ -67,13 +62,25 @@ export default function ProductTable() {
       sellingPrice: parseFloat(form.sellingPrice) || 0,
       lowStockThreshold: parseInt(form.lowStockThreshold) || 0,
     });
-    setForm({ name:'', category:'', costPrice:'', sellingPrice:'', lowStockThreshold:'10' });
-    fetchProducts(pagination.page, pagination.pageSize);
+    setForm({
+      name: '',
+      category: '',
+      costPrice: '',
+      sellingPrice: '',
+      lowStockThreshold: '10',
+    });
+    // Refresh list
+    try {
+      const data = await fetchProducts(pagination.page, pagination.pageSize);
+      if (data) setProducts(data.products);
+    } catch (err) {
+      console.error('Failed to reload after add:', err);
+    }
   };
 
   // Inline edit state
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm]   = useState({});
+  const [editForm, setEditForm] = useState({});
 
   const startEdit = p => {
     setEditingId(p._id);
@@ -98,12 +105,24 @@ export default function ProductTable() {
       lowStockThreshold: parseInt(editForm.lowStockThreshold) || 0,
     });
     cancelEdit();
-    fetchProducts(pagination.page, pagination.pageSize);
+    // Refresh list
+    try {
+      const data = await fetchProducts(pagination.page, pagination.pageSize);
+      if (data) setProducts(data.products);
+    } catch (err) {
+      console.error('Failed to reload after edit:', err);
+    }
   };
   const handleDelete = async id => {
     if (!window.confirm('Delete this product?')) return;
     await deleteProduct(id);
-    fetchProducts(pagination.page, pagination.pageSize);
+    // Refresh list
+    try {
+      const data = await fetchProducts(pagination.page, pagination.pageSize);
+      if (data) setProducts(data.products);
+    } catch (err) {
+      console.error('Failed to reload after delete:', err);
+    }
   };
 
   return (
